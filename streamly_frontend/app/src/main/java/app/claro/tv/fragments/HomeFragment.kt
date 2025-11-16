@@ -59,6 +59,10 @@ class HomeFragment : Fragment() {
     private var topNavBarComposeView: ComposeView? = null
     private var topNavBarId: Int = View.NO_ID
 
+    // Dynamic vertical spacing to ensure top edge-to-nav equals nav-to-hero.
+    // We compute navToHeroGapPx from actual positions and then apply the same value as top padding above the nav.
+    private var navToHeroGapPx: Int = 0
+
     // Hero carousel container and items
     private var heroBannerView: View? = null
     private var heroBannerId: Int = View.NO_ID
@@ -153,7 +157,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             setBackgroundColor(Color.parseColor("#121212"))
-            // Overscan-safe padding: 88dp left/right, 36dp top, 48dp bottom
+            // Overscan-safe padding: 88dp left/right, minimal top initially (we will compute symmetric spacing),
+            // and 48dp bottom. Start with overscan-safe minimum top of 36dp to avoid clipping while measuring.
             setPadding(dpToPx(88), dpToPx(36), dpToPx(88), dpToPx(48))
             // Ensure hero full-bleed area isn't clipped by the root container
             clipToPadding = false
@@ -391,9 +396,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // 18dp from top of the screen; rootContainer has its own padding, so we only add top margin here
-                topMargin = dpToPx(18)
-                // Slight additional tighten to align with reduced hero gap
+                // Do not set a fixed top margin; symmetric top spacing will be applied to rootContainer padding.
+                // Maintain a small bottom margin to separate from hero before we compute the exact gap.
                 bottomMargin = dpToPx(8)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
@@ -466,8 +470,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             ).apply {
-                // Slightly tightened nav-to-hero spacing for consistent vertical rhythm (22dp -> 20dp)
-                topMargin = dpToPx(20)
+                // Do not set fixed topMargin. We will measure actual distance from nav to hero
+                // and then apply the same value above the nav as rootContainer padding top.
                 // Root container has 88dp start/end padding; use negative margins to allow full width bleed
                 marginStart = -dpToPx(88)
                 marginEnd = -dpToPx(88)
@@ -631,6 +635,37 @@ class HomeFragment : Fragment() {
 
         // Add to root
         rootContainer.addView(container)
+
+        // After nav and hero exist, compute symmetric top spacing:
+        // top edge-to-nav gap should equal nav-to-hero gap.
+        // We set rootContainer's top padding to max(overscanMin, measuredNavToHero), where overscanMin = 36dp.
+        container.post {
+            val navView = topNavBarComposeView
+            val heroView = heroBannerView
+            if (navView != null && heroView != null) {
+                // Y positions relative to rootContainer
+                val navBottom = navView.bottom
+                val heroTop = heroView.top
+                val measuredGap = (heroTop - navBottom).coerceAtLeast(0)
+                navToHeroGapPx = measuredGap
+
+                val overscanMinTop = dpToPx(36)
+                // Set symmetric top padding: equals the nav-to-hero gap but not less than overscan minimum
+                val desiredTopPadding = navToHeroGapPx.coerceAtLeast(overscanMinTop)
+
+                // Current paddings
+                val currentLeft = rootContainer.paddingLeft
+                val currentRight = rootContainer.paddingRight
+                val currentBottom = rootContainer.paddingBottom
+
+                // Apply new top padding while preserving sides and bottom
+                rootContainer.setPadding(currentLeft, desiredTopPadding, currentRight, currentBottom)
+
+                // Ensure focus visuals not clipped
+                rootContainer.clipToPadding = false
+                rootContainer.clipChildren = false
+            }
+        }
 
         // Recompute on layout width changes to maintain exact centering and peeking
         heroScrollView?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
