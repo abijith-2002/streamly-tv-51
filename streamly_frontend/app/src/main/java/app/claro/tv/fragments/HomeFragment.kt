@@ -490,8 +490,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 // Do not set a fixed top margin; symmetric top spacing will be applied to rootContainer padding.
-                // Maintain a small bottom margin to separate from hero before we compute the exact gap.
-                bottomMargin = dpToPx(8)
+                // Slightly increase the bottom margin to widen the gap to the hero (adds ~6dp).
+                bottomMargin = dpToPx(14)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
 
@@ -960,7 +960,8 @@ class HomeFragment : Fragment() {
             text = "Seguí viendo"
             textSize = 16f
             setTextColor(Color.WHITE)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            // Set to regular/normal weight as requested
+            typeface = android.graphics.Typeface.DEFAULT
         }
 
         // Loading indicator
@@ -1063,7 +1064,8 @@ class HomeFragment : Fragment() {
             text = "Canales de TV"
             textSize = 16f
             setTextColor(Color.WHITE)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            // Set to regular/normal weight as requested
+            typeface = android.graphics.Typeface.DEFAULT
         }
 
         // Loading indicator
