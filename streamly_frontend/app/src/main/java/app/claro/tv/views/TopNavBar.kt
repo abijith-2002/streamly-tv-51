@@ -154,6 +154,7 @@ private fun FocusablePill(
     var focusableModifier = Modifier
         .wrapContentWidth()
         .height(26.5.dp)
+        .padding(horizontal = 12.dp) // include horizontal padding inside pill width
         .background(color = focusBackgroundColor, shape = pillShape)
     
     // Apply focus requester if provided (for search icon)
@@ -180,8 +181,7 @@ private fun FocusablePill(
         }
 
     Box(
-        modifier = focusableModifier
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+        modifier = focusableModifier,
         contentAlignment = Alignment.Center
     ) {
         if (isIcon) {
