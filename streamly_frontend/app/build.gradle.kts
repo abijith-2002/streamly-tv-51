@@ -49,6 +49,20 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
+
+    // Stabilize packaging to avoid duplicate META-INF resources from dependencies (Compose, Media3, OkHttp, etc.)
+    packaging {
+        resources {
+            // Common license and notice files frequently duplicated across transitive deps
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/LICENSE*"
+            excludes += "META-INF/NOTICE*"
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/ASL2.0"
+            // Kotlin module metadata sometimes surfaces as duplicates in app packaging
+            excludes += "META-INF/*.kotlin_module"
+        }
+    }
 }
 
 dependencies {
