@@ -16,7 +16,13 @@ import app.claro.tv.models.TvChannel
  * PUBLIC_INTERFACE
  * Custom view representing a TV Channel card with program info, live badge, and play button.
  * Optimized for Android TV with D-pad navigation and overscan-safe margins.
- * 
+ *
+ * Layout metrics per spec:
+ * - Card width: 206dp (fixed)
+ * - Image section height: 116dp
+ * - Title/info area height: 40dp
+ * - Corner radius: 0dp
+ *
  * @param context Android context
  * @param attrs XML attributes
  */
@@ -36,10 +42,10 @@ class TvChannelCard @JvmOverloads constructor(
     private var tvChannel: TvChannel? = null
 
     init {
-        // Card setup - compact size 206dp x 116dp with spacing
+        // Card setup: width 206dp, height 156dp (116 + 40)
         layoutParams = LinearLayout.LayoutParams(
             dpToPx(206),
-            dpToPx(116)
+            dpToPx(156)
         ).apply {
             marginEnd = dpToPx(10)
         }
@@ -50,10 +56,12 @@ class TvChannelCard @JvmOverloads constructor(
         isFocusableInTouchMode = true
         clipToPadding = false
         clipChildren = false
+        useCompatPadding = false
+        preventCornerOverlap = false
 
-        // Root container - horizontal layout, prevent clipping
+        // Vertical stack: image(116dp) + info(40dp)
         val container = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -62,25 +70,25 @@ class TvChannelCard @JvmOverloads constructor(
             clipChildren = false
         }
 
-        // Thumbnail on left: 40% width approx of 206dp -> ~82dp
+        // Image section (top)
         thumbnailView = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                dpToPx(82),
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dpToPx(116)
             )
             setBackgroundColor(Color.parseColor("#2d2d2d"))
             clipToPadding = false
             clipChildren = false
         }
 
-        // Progress bar on thumbnail bottom
+        // Progress bar at bottom-left
         progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
             layoutParams = FrameLayout.LayoutParams(
-                dpToPx(60),
+                dpToPx(120),
                 dpToPx(4)
             ).apply {
                 gravity = Gravity.BOTTOM or Gravity.START
-                leftMargin = dpToPx(8)
+                marginStart = dpToPx(8)
                 bottomMargin = dpToPx(6)
             }
             max = 100
@@ -92,26 +100,14 @@ class TvChannelCard @JvmOverloads constructor(
         }
         thumbnailView.addView(progressBar)
 
-        // Smaller play overlay
-        val playButton = FrameLayout(context).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                dpToPx(40),
-                dpToPx(40)
-            ).apply {
-                gravity = Gravity.CENTER
-            }
-            setBackgroundColor(Color.parseColor("#99000000"))
-        }
-        thumbnailView.addView(playButton)
-
-        // Rent badge compact
+        // Rent badge in top-left of image
         rentBadge = TextView(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                leftMargin = dpToPx(6)
+                marginStart = dpToPx(6)
                 topMargin = dpToPx(6)
             }
             text = "ALQUILÁ"
@@ -123,22 +119,22 @@ class TvChannelCard @JvmOverloads constructor(
         }
         thumbnailView.addView(rentBadge)
 
-        // Info container right side
+        // Info area height 40dp
         val infoContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
-                0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                1f
+                dpToPx(40)
             )
-            setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8))
+            setPadding(dpToPx(8), dpToPx(6), dpToPx(8), dpToPx(6))
         }
 
-        // Program title compact
+        // First row: program title (bold-ish)
         programTitleText = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                0,
+                1f
             )
             textSize = 14f
             setTextColor(Color.WHITE)
@@ -146,37 +142,46 @@ class TvChannelCard @JvmOverloads constructor(
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
 
-        // Channel info compact
-        channelInfoText = TextView(context).apply {
+        // Second row: channel and time compact with optional LIVE badge prefix
+        val secondaryRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                0,
+                1f
             )
-            textSize = 12f
-            setTextColor(Color.parseColor("#b0b0b0"))
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
         }
 
-        // Live badge smaller
         liveBadge = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = dpToPx(4)
+                marginEnd = dpToPx(6)
             }
             text = "EN VIVO"
             textSize = 10f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#ff0000"))
-            setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3))
+            setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2))
+            visibility = GONE
         }
 
-        // Time info compact
+        channelInfoText = TextView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+            textSize = 12f
+            setTextColor(Color.parseColor("#b0b0b0"))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+
         timeInfoText = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             textSize = 12f
@@ -185,16 +190,18 @@ class TvChannelCard @JvmOverloads constructor(
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
 
+        secondaryRow.addView(liveBadge)
+        secondaryRow.addView(channelInfoText)
+        secondaryRow.addView(timeInfoText)
+
         infoContainer.addView(programTitleText)
-        infoContainer.addView(channelInfoText)
-        infoContainer.addView(liveBadge)
-        infoContainer.addView(timeInfoText)
+        infoContainer.addView(secondaryRow)
 
         container.addView(thumbnailView)
         container.addView(infoContainer)
         addView(container)
 
-        // Focus change listener (scale) with no clipping
+        // Focus scale animation
         onFocusChangeListener = OnFocusChangeListener { _, hasFocus ->
             animate()
                 .scaleX(if (hasFocus) 1.05f else 1.0f)
@@ -207,14 +214,14 @@ class TvChannelCard @JvmOverloads constructor(
     /**
      * PUBLIC_INTERFACE
      * Binds TV channel data to the card view.
-     * 
+     *
      * @param channel TvChannel to display
      */
     fun bind(channel: TvChannel) {
         tvChannel = channel
         programTitleText.text = channel.programTitle
         channelInfoText.text = "${channel.channelNumber} | ${channel.channelName}"
-        timeInfoText.text = "${channel.startTime} - ${channel.endTime}"
+        timeInfoText.text = " ${channel.startTime}-${channel.endTime}"
         progressBar.progress = (channel.progress * 100).toInt()
         liveBadge.visibility = if (channel.isLive) VISIBLE else GONE
         rentBadge.visibility = if (channel.isRentable) VISIBLE else GONE

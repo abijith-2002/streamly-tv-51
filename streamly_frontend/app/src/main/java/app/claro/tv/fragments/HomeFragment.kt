@@ -340,6 +340,14 @@ class HomeFragment : Fragment() {
                 // Respect current rails focus gate
                 isFocusable = railsFocusEnabled
                 isFocusableInTouchMode = railsFocusEnabled
+                // Ensure no parent intercept; child takes focus
+                descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
+                // Add start margin only for first item if needed (kept at 0; container padding handles 10dp)
+                (layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                    if (index == 0) {
+                        lp.marginStart = lp.marginStart // no-op; padding already applied
+                    }
+                }
             }
             if (index == 0) {
                 firstCardId = card.id
@@ -361,7 +369,7 @@ class HomeFragment : Fragment() {
     private fun updateTvChannelsRail(channels: List<TvChannel>) {
         tvChannelsRail.removeAllViews()
 
-        channels.forEach { channel ->
+        channels.forEachIndexed { index, channel ->
             val card = TvChannelCard(requireContext()).apply {
                 // Give each card a stable view id for focus routing
                 id = View.generateViewId()
@@ -372,6 +380,7 @@ class HomeFragment : Fragment() {
                 // Respect current rails focus gate
                 isFocusable = railsFocusEnabled
                 isFocusableInTouchMode = railsFocusEnabled
+                descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
             }
             card.bind(channel)
             tvChannelsRail.addView(card)
@@ -812,8 +821,7 @@ class HomeFragment : Fragment() {
             ).apply {
                 // Keep spacing to hero consistent; existing value retained
                 topMargin = dpToPx(38)
-                // Start offset set to 10dp, RTL-aware via marginStart
-                marginStart = dpToPx(10)
+                // No marginStart; handled by inner scroll's start padding for proper first item offset
             }
             // Ensure RTL-aware start padding fine-tuning not needed; clear previous fractional padding
             setPaddingRelative(0, 0, 0, 0)
@@ -862,8 +870,13 @@ class HomeFragment : Fragment() {
             isHorizontalScrollBarEnabled = false
             // Prevent scroll view from stealing focus
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            // No parent focus interception; let child cards take DPAD focus
+            isFocusable = false
+            isFocusableInTouchMode = false
             clipToPadding = false
             clipChildren = false
+            // 10dp start padding so first item starts 10dp from the left (RTL-aware via relative padding)
+            setPaddingRelative(dpToPx(10), 0, 0, 0)
             // Route UP into the TopNavBar if user navigates upwards from within the rail
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
@@ -880,6 +893,9 @@ class HomeFragment : Fragment() {
             // Prevent rail from stealing focus initially; gating is handled separately
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            // Avoid clipping on focus scale and keep RTL-aware spacing
+            clipToPadding = false
+            clipChildren = false
         }
 
         scrollView.addView(continueWatchingRail)
@@ -902,8 +918,7 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 topMargin = dpToPx(72)
-                // Set RTL-aware start offset to 10dp
-                marginStart = dpToPx(10)
+                // No marginStart; first item offset handled by inner scroll start padding
             }
             // Remove fractional padding; avoid clipping on focus scale
             setPaddingRelative(0, 0, 0, 0)
@@ -951,6 +966,10 @@ class HomeFragment : Fragment() {
             isHorizontalScrollBarEnabled = false
             // Prevent scroll view from stealing focus
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            isFocusable = false
+            isFocusableInTouchMode = false
+            // First item offset 10dp from start; RTL-aware
+            setPaddingRelative(dpToPx(10), 0, 0, 0)
             // Route UP into the TopNavBar if user navigates upwards from within the rail
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
@@ -967,6 +986,8 @@ class HomeFragment : Fragment() {
             // Prevent rail from stealing focus initially; gating is handled separately
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            clipToPadding = false
+            clipChildren = false
         }
 
         scrollView.addView(tvChannelsRail)

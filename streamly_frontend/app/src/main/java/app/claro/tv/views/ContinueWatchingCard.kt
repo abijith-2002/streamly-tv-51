@@ -16,7 +16,14 @@ import app.claro.tv.models.ContentItem
  * PUBLIC_INTERFACE
  * Custom view representing a Continue Watching card with thumbnail, progress bar, and title.
  * Designed for Android TV D-pad navigation with proper focus handling.
- * 
+ *
+ * Layout metrics per spec:
+ * - Card width: 206dp (fixed)
+ * - Card radius: 0dp
+ * - Image section height: 116dp
+ * - Title text container height: 40dp
+ * - Total height accommodates focus scale without clipping (container doesn't clip)
+ *
  * @param context Android context
  * @param attrs XML attributes
  */
@@ -32,23 +39,27 @@ class ContinueWatchingCard @JvmOverloads constructor(
     private var contentItem: ContentItem? = null
 
     init {
-        // Card setup - new compact dimensions 206dp x 116dp, keep spacing between cards
+        // Card setup - maintain width 206dp; height is image(116) + title(40) = 156dp.
         layoutParams = LinearLayout.LayoutParams(
             dpToPx(206),
-            dpToPx(116)
+            dpToPx(156)
         ).apply {
+            // Keep inter-item spacing 10dp; start spacing handled by rail container
             marginEnd = dpToPx(10)
         }
         radius = 0f
         cardElevation = dpToPx(4).toFloat()
         setCardBackgroundColor(Color.parseColor("#1a1a1a"))
+        // Ensure focusable for D-pad and in touch mode for consistency
         isFocusable = true
         isFocusableInTouchMode = true
         // Avoid clipping during focus scale
         clipToPadding = false
         clipChildren = false
+        useCompatPadding = false
+        preventCornerOverlap = false
 
-        // Root container
+        // Root container for vertical stack
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(
@@ -59,19 +70,18 @@ class ContinueWatchingCard @JvmOverloads constructor(
             clipChildren = false
         }
 
-        // Thumbnail container with progress bar overlay
-        // Height scaled to fit compact card: leave small area for title
+        // Image section height exactly 116dp
         thumbnailView = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dpToPx(80)
+                dpToPx(116)
             )
             setBackgroundColor(Color.parseColor("#2d2d2d"))
             clipToPadding = false
             clipChildren = false
         }
 
-        // Progress bar at bottom of thumbnail, width adapted to new card width
+        // Progress bar positioned at bottom-center of image
         progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
             layoutParams = FrameLayout.LayoutParams(
                 dpToPx(180),
@@ -89,11 +99,11 @@ class ContinueWatchingCard @JvmOverloads constructor(
         }
         thumbnailView.addView(progressBar)
 
-        // Title area compact
+        // Title container height exactly 40dp
         val titleArea = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dpToPx(36)
+                dpToPx(40)
             )
             setBackgroundColor(Color.parseColor("#66000000"))
         }
@@ -101,17 +111,18 @@ class ContinueWatchingCard @JvmOverloads constructor(
         titleText = TextView(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT
             ).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                leftMargin = dpToPx(8)
-                rightMargin = dpToPx(8)
-                topMargin = dpToPx(6)
+                marginStart = dpToPx(8)
+                marginEnd = dpToPx(8)
             }
             textSize = 14f
             setTextColor(Color.WHITE)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
+            isFocusable = false
+            isFocusableInTouchMode = false
         }
         titleArea.addView(titleText)
 
@@ -119,7 +130,7 @@ class ContinueWatchingCard @JvmOverloads constructor(
         container.addView(titleArea)
         addView(container)
 
-        // Focus change listener for scale effect; ensure no clipping
+        // Scale on focus with no clipping
         onFocusChangeListener = OnFocusChangeListener { _, hasFocus ->
             animate()
                 .scaleX(if (hasFocus) 1.05f else 1.0f)
@@ -132,7 +143,7 @@ class ContinueWatchingCard @JvmOverloads constructor(
     /**
      * PUBLIC_INTERFACE
      * Binds content item data to the card view.
-     * 
+     *
      * @param item ContentItem to display
      */
     fun bind(item: ContentItem) {
