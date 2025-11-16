@@ -32,12 +32,11 @@ class ContinueWatchingCard @JvmOverloads constructor(
     private var contentItem: ContentItem? = null
 
     init {
-        // Card setup - overscan safe dimensions
+        // Card setup - new compact dimensions 206dp x 116dp, keep spacing between cards
         layoutParams = LinearLayout.LayoutParams(
-            dpToPx(412),
-            dpToPx(312)
+            dpToPx(206),
+            dpToPx(116)
         ).apply {
-            // Slightly increased spacing between cards for better separation
             marginEnd = dpToPx(10)
         }
         radius = 0f
@@ -45,6 +44,9 @@ class ContinueWatchingCard @JvmOverloads constructor(
         setCardBackgroundColor(Color.parseColor("#1a1a1a"))
         isFocusable = true
         isFocusableInTouchMode = true
+        // Avoid clipping during focus scale
+        clipToPadding = false
+        clipChildren = false
 
         // Root container
         val container = LinearLayout(context).apply {
@@ -53,25 +55,30 @@ class ContinueWatchingCard @JvmOverloads constructor(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            clipToPadding = false
+            clipChildren = false
         }
 
         // Thumbnail container with progress bar overlay
+        // Height scaled to fit compact card: leave small area for title
         thumbnailView = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dpToPx(232)
+                dpToPx(80)
             )
             setBackgroundColor(Color.parseColor("#2d2d2d"))
+            clipToPadding = false
+            clipChildren = false
         }
 
-        // Progress bar at bottom of thumbnail
+        // Progress bar at bottom of thumbnail, width adapted to new card width
         progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
             layoutParams = FrameLayout.LayoutParams(
-                dpToPx(379),
-                dpToPx(6)
+                dpToPx(180),
+                dpToPx(4)
             ).apply {
                 gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                bottomMargin = dpToPx(16)
+                bottomMargin = dpToPx(6)
             }
             max = 100
             progressDrawable = context.getDrawable(android.R.drawable.progress_horizontal)
@@ -82,27 +89,29 @@ class ContinueWatchingCard @JvmOverloads constructor(
         }
         thumbnailView.addView(progressBar)
 
-        // Title area
+        // Title area compact
         val titleArea = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dpToPx(80)
+                dpToPx(36)
             )
             setBackgroundColor(Color.parseColor("#66000000"))
         }
 
         titleText = TextView(context).apply {
             layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                leftMargin = dpToPx(16)
-                topMargin = dpToPx(24)
+                leftMargin = dpToPx(8)
+                rightMargin = dpToPx(8)
+                topMargin = dpToPx(6)
             }
-            textSize = 20f
+            textSize = 14f
             setTextColor(Color.WHITE)
-            maxLines = 2
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
         titleArea.addView(titleText)
 
@@ -110,7 +119,7 @@ class ContinueWatchingCard @JvmOverloads constructor(
         container.addView(titleArea)
         addView(container)
 
-        // Focus change listener for scale effect
+        // Focus change listener for scale effect; ensure no clipping
         onFocusChangeListener = OnFocusChangeListener { _, hasFocus ->
             animate()
                 .scaleX(if (hasFocus) 1.05f else 1.0f)

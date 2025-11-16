@@ -810,13 +810,16 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Further reduced by 6dp to tighten spacing to hero while keeping focus scale safe (original 56dp -> 38dp)
+                // Keep spacing to hero consistent; existing value retained
                 topMargin = dpToPx(38)
-                // Apply start-aware offset for entire rail container (title + rail) to 28.5dp
-                marginStart = dpToPx(28)
+                // Start offset set to 10dp, RTL-aware via marginStart
+                marginStart = dpToPx(10)
             }
-            // Add fractional .5dp via start padding to avoid rounding loss in integer px conversion
-            setPaddingRelative(dpToPxF(0.5f), 0, 0, 0)
+            // Ensure RTL-aware start padding fine-tuning not needed; clear previous fractional padding
+            setPaddingRelative(0, 0, 0, 0)
+            // Avoid clipping when cards scale on focus
+            clipToPadding = false
+            clipChildren = false
             // Prevent this section from stealing focus on load
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
@@ -827,8 +830,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Title now inherits container offset; keep only bottom spacing
-                bottomMargin = dpToPx(16)
+                // Reduce vertical gap to 1dp between title and rail
+                bottomMargin = dpToPx(1)
             }
             text = "Seguí viendo"
             // Set to 16sp per requirement for rail titles
@@ -859,6 +862,8 @@ class HomeFragment : Fragment() {
             isHorizontalScrollBarEnabled = false
             // Prevent scroll view from stealing focus
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            clipToPadding = false
+            clipChildren = false
             // Route UP into the TopNavBar if user navigates upwards from within the rail
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
@@ -897,11 +902,13 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 topMargin = dpToPx(72)
-                // Apply start-aware offset for entire rail container (title + rail) to 28.5dp
-                marginStart = dpToPx(28)
+                // Set RTL-aware start offset to 10dp
+                marginStart = dpToPx(10)
             }
-            // Add fractional .5dp via start padding to avoid rounding loss in integer px conversion
-            setPaddingRelative(dpToPxF(0.5f), 0, 0, 0)
+            // Remove fractional padding; avoid clipping on focus scale
+            setPaddingRelative(0, 0, 0, 0)
+            clipToPadding = false
+            clipChildren = false
             // Prevent this section from stealing focus on load
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
@@ -912,8 +919,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Title now inherits container offset; keep only bottom spacing
-                bottomMargin = dpToPx(16)
+                // Reduce vertical gap to 1dp between title and rail
+                bottomMargin = dpToPx(1)
             }
             text = "Canales de TV"
             // Set to 16sp per requirement for rail titles

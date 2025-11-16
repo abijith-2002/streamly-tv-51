@@ -36,12 +36,11 @@ class TvChannelCard @JvmOverloads constructor(
     private var tvChannel: TvChannel? = null
 
     init {
-        // Card setup
+        // Card setup - compact size 206dp x 116dp with spacing
         layoutParams = LinearLayout.LayoutParams(
-            dpToPx(745),
-            dpToPx(212)
+            dpToPx(206),
+            dpToPx(116)
         ).apply {
-            // Slightly increased spacing between cards for better separation
             marginEnd = dpToPx(10)
         }
         radius = 0f
@@ -49,34 +48,40 @@ class TvChannelCard @JvmOverloads constructor(
         setCardBackgroundColor(Color.parseColor("#1a1a1a"))
         isFocusable = true
         isFocusableInTouchMode = true
+        clipToPadding = false
+        clipChildren = false
 
-        // Root container - horizontal layout
+        // Root container - horizontal layout, prevent clipping
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            clipToPadding = false
+            clipChildren = false
         }
 
-        // Thumbnail container (left side)
+        // Thumbnail on left: 40% width approx of 206dp -> ~82dp
         thumbnailView = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
-                dpToPx(377),
+                dpToPx(82),
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setBackgroundColor(Color.parseColor("#2d2d2d"))
+            clipToPadding = false
+            clipChildren = false
         }
 
-        // Progress bar at bottom of thumbnail
+        // Progress bar on thumbnail bottom
         progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
             layoutParams = FrameLayout.LayoutParams(
-                dpToPx(207),
-                dpToPx(6)
+                dpToPx(60),
+                dpToPx(4)
             ).apply {
                 gravity = Gravity.BOTTOM or Gravity.START
-                leftMargin = dpToPx(15)
-                bottomMargin = dpToPx(19)
+                leftMargin = dpToPx(8)
+                bottomMargin = dpToPx(6)
             }
             max = 100
             progressDrawable = context.getDrawable(android.R.drawable.progress_horizontal)
@@ -87,11 +92,11 @@ class TvChannelCard @JvmOverloads constructor(
         }
         thumbnailView.addView(progressBar)
 
-        // Play button indicator (circular overlay)
+        // Smaller play overlay
         val playButton = FrameLayout(context).apply {
             layoutParams = FrameLayout.LayoutParams(
-                dpToPx(92),
-                dpToPx(92)
+                dpToPx(40),
+                dpToPx(40)
             ).apply {
                 gravity = Gravity.CENTER
             }
@@ -99,81 +104,85 @@ class TvChannelCard @JvmOverloads constructor(
         }
         thumbnailView.addView(playButton)
 
-        // Rent badge (top-left corner)
+        // Rent badge compact
         rentBadge = TextView(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                leftMargin = dpToPx(15)
-                topMargin = dpToPx(17)
+                leftMargin = dpToPx(6)
+                topMargin = dpToPx(6)
             }
             text = "ALQUILÁ"
-            textSize = 12f
+            textSize = 10f
             setTextColor(Color.BLACK)
             setBackgroundColor(Color.parseColor("#ffc107"))
-            setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
+            setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3))
             visibility = GONE
         }
         thumbnailView.addView(rentBadge)
 
-        // Info container (right side)
+        // Info container right side
         val infoContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
-                dpToPx(337),
-                ViewGroup.LayoutParams.MATCH_PARENT
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                1f
             )
-            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+            setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8))
         }
 
-        // Program title
+        // Program title compact
         programTitleText = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            textSize = 28f
+            textSize = 14f
             setTextColor(Color.WHITE)
-            maxLines = 2
-            setPadding(0, 0, 0, dpToPx(8))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
 
-        // Channel info
+        // Channel info compact
         channelInfoText = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            textSize = 18f
+            textSize = 12f
             setTextColor(Color.parseColor("#b0b0b0"))
-            setPadding(0, 0, 0, dpToPx(8))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
 
-        // Live badge
+        // Live badge smaller
         liveBadge = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = dpToPx(8)
+                bottomMargin = dpToPx(4)
             }
             text = "EN VIVO"
-            textSize = 14f
+            textSize = 10f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#ff0000"))
-            setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
+            setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3))
         }
 
-        // Time info
+        // Time info compact
         timeInfoText = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            textSize = 18f
+            textSize = 12f
             setTextColor(Color.parseColor("#b0b0b0"))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
 
         infoContainer.addView(programTitleText)
@@ -185,7 +194,7 @@ class TvChannelCard @JvmOverloads constructor(
         container.addView(infoContainer)
         addView(container)
 
-        // Focus change listener
+        // Focus change listener (scale) with no clipping
         onFocusChangeListener = OnFocusChangeListener { _, hasFocus ->
             animate()
                 .scaleX(if (hasFocus) 1.05f else 1.0f)
