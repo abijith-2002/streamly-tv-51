@@ -76,14 +76,8 @@ class HeroCard @JvmOverloads constructor(
 
         addView(container)
 
-        // Focus scaling effect
-        onFocusChangeListener = OnFocusChangeListener { _, hasFocus ->
-            animate()
-                .scaleX(if (hasFocus) 1.05f else 1.0f)
-                .scaleY(if (hasFocus) 1.05f else 1.0f)
-                .setDuration(200)
-                .start()
-        }
+        // No scaling on focus to prevent any clipping or size change inside fixed hero banner
+        onFocusChangeListener = null
     }
 
     /**
