@@ -2,7 +2,6 @@ package app.claro.tv.views
 
 import android.view.KeyEvent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
  *   .background(Color(0xFF28292F), RoundedCornerShape(17.dp))
  * - Items in order: Search icon, "Inicio", "Peliculas", "Series", "TV en vivo", "Kids", "Mis Contenidos"
  * - Even spacing within 579.5.dp width, D-pad focusable with visible focus feedback.
+ * - Focus state: pill-shaped background (#9B0F0F), height 26.5dp, width wrapping content, corner radius 18.5dp
  *
  * Params:
  * - onItemClick: stub click handler for each item, index based (0 = search)
@@ -101,7 +102,8 @@ fun TopNavBar(
 
 /**
  * Small focusable pill for each nav item.
- * Provides visible focus feedback (border + slight scale) on TV.
+ * Provides visible focus feedback with pill-shaped background on TV.
+ * Focus styling: #9B0F0F background, height 26.5dp, width wraps content, corner radius 18.5dp
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -112,13 +114,19 @@ private fun FocusablePill(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     var focused by remember { mutableStateOf(false) }
-    val focusBorderColor = if (focused) Color.White else Color.Transparent
-
-    val shape = RoundedCornerShape(12.dp)
+    
+    // Focus background color: #9B0F0F when focused, transparent otherwise
+    val focusBackgroundColor = if (focused) Color(0xFF9B0F0F) else Color.Transparent
+    
+    // Pill shape with corner radius 18.5dp
+    val pillShape = RoundedCornerShape(18.5.dp)
 
     val focusableModifier = Modifier
-        .border(width = 1.dp, color = focusBorderColor, shape = shape)
+        .wrapContentWidth()
+        .height(26.5.dp)
+        .background(color = focusBackgroundColor, shape = pillShape)
         .focusable(interactionSource = interactionSource)
+        .onFocusChanged { state -> focused = state.hasFocus }
         .onKeyEvent { keyEvent ->
             if (keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
                 keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER
@@ -134,31 +142,24 @@ private fun FocusablePill(
 
     Box(
         modifier = focusableModifier
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .onFocusChanged { state -> focused = state.hasFocus }
-        ) {
-            if (isIcon) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Buscar",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            } else {
-                Text(
-                    text = label.orEmpty(),
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Normal,
-                    textAlign = TextAlign.Center
-                )
-            }
+        if (isIcon) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Buscar",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+        } else {
+            Text(
+                text = label.orEmpty(),
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Normal,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
-
-
