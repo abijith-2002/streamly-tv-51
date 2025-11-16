@@ -43,10 +43,10 @@ class HeroCard @JvmOverloads constructor(
         ).apply {
             marginEnd = dpToPx(12)
         }
-        radius = dpToPx(8).toFloat()
+        radius = 0f
         cardElevation = dpToPx(4).toFloat()
         setCardBackgroundColor(Color.parseColor("#1a1a1a"))
-        useCompatPadding = true
+        useCompatPadding = false
 
         isFocusable = true
         isFocusableInTouchMode = true

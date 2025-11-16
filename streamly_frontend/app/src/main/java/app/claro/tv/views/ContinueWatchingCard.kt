@@ -37,9 +37,10 @@ class ContinueWatchingCard @JvmOverloads constructor(
             dpToPx(412),
             dpToPx(312)
         ).apply {
-            marginEnd = dpToPx(10)
+            // Slightly reduced spacing between cards (from 10dp to 8dp)
+            marginEnd = dpToPx(8)
         }
-        radius = dpToPx(8).toFloat()
+        radius = 0f
         cardElevation = dpToPx(4).toFloat()
         setCardBackgroundColor(Color.parseColor("#1a1a1a"))
         isFocusable = true

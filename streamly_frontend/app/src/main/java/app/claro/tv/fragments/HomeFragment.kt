@@ -71,8 +71,10 @@ class HomeFragment : Fragment() {
     // Carousel sizing (dp)
     private val heroCardWidthDp: Int = 872
     private val heroCardHeightDp: Int = 222
-    private val heroCardSpacingDp: Int = 24 // ITEM_SPACING_DP for symmetric peeking
-    private val heroPeekDp: Int = 60 // PEEK_DP (desired visible portion of adjacent cards)
+    // Reduce spacing between cards to ~10dp for tighter layout
+    private val heroCardSpacingDp: Int = 10
+    // Enforce 34dp peek for previous/next cards
+    private val heroPeekDp: Int = 34
 
     // Derived px values (computed in setupHeroBanner / after layout)
     private var heroCardWidthPx: Int = 0
@@ -521,7 +523,7 @@ class HomeFragment : Fragment() {
                     heroCardWidthPx,
                     heroCardHeightPx
                 ).apply {
-                    // spacing between cards to retain peek visibility
+                    // spacing between cards (reduced) to retain 34dp peek visibility
                     marginEnd = heroCardSpacingPx
                 }
                 // UP should go to top nav
@@ -532,7 +534,7 @@ class HomeFragment : Fragment() {
                 isFocusableInTouchMode = true
                 setTitle(title)
 
-                // When card gains focus (via DPAD), smoothly center this card with peeking
+                // When card gains focus (via DPAD), smoothly center this card with exact 34dp peeks on sides
                 setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
                         val position = heroCards.indexOf(v as HeroCard)
@@ -581,9 +583,11 @@ class HomeFragment : Fragment() {
         heroScrollView?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             val viewportWidth = heroScrollView?.width ?: 0
             if (viewportWidth > 0) {
+                // sidePadding = max(0, (viewportWidth - cardWidth)/2 - peek)
                 val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
                 heroSidePaddingPx = rawSide.coerceAtLeast(0)
                 heroScrollView?.setPadding(heroSidePaddingPx, 0, heroSidePaddingPx, 0)
+                // Always keep current card centered after layout changes
                 centerHeroAt(heroCurrentIndex, animate = false)
             }
         }
@@ -592,7 +596,7 @@ class HomeFragment : Fragment() {
         container.post {
             val viewportWidth = heroScrollView?.width ?: 0
             if (viewportWidth > 0) {
-                // sidePaddingPx = max(0, (containerWidthPx - CARD_WIDTH_PX)/2 - PEEK_PX)
+                // sidePaddingPx = max(0, (viewportWidth - cardWidth)/2 - peek)
                 val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
                 heroSidePaddingPx = rawSide.coerceAtLeast(0)
                 heroScrollView?.setPadding(heroSidePaddingPx, 0, heroSidePaddingPx, 0)
@@ -601,7 +605,7 @@ class HomeFragment : Fragment() {
                 heroScrollView?.clipToPadding = false
                 heroScrollView?.clipChildren = false
 
-                // Initially center the first card with symmetric peeking
+                // Initially center the first card with symmetric peeking (34dp)
                 centerHeroAt(heroCurrentIndex, animate = false)
             }
         }
@@ -625,7 +629,7 @@ class HomeFragment : Fragment() {
         val viewportWidth = heroScrollView?.width ?: 0
         if (viewportWidth <= 0) return
 
-        // side padding may not be computed yet (pre-layout); compute a safe default
+        // side padding may not be computed yet (pre-layout); compute default honoring 34dp peek
         if (heroSidePaddingPx == 0) {
             val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
             heroSidePaddingPx = rawSide.coerceAtLeast(0)
