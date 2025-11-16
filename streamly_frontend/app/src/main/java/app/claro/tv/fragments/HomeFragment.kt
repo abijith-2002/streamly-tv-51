@@ -938,16 +938,13 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Keep spacing to hero consistent; existing value retained
-                topMargin = dpToPx(38)
-                // No marginStart; handled by inner scroll's start padding for proper first item offset
+                // Set spacing between hero carousel and "Seguí viendo" title to 5dp
+                topMargin = dpToPx(5)
             }
-            // Ensure RTL-aware start padding fine-tuning not needed; clear previous fractional padding
+            // Keep RTL-aware zero padding here; card start offset handled by inner scroll
             setPaddingRelative(0, 0, 0, 0)
-            // Avoid clipping when cards scale on focus
             clipToPadding = false
             clipChildren = false
-            // Prevent this section from stealing focus on load
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
@@ -957,11 +954,10 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Reduce vertical gap to 1dp between title and rail
-                bottomMargin = dpToPx(1)
+                // Set title-to-rail gap to 3dp
+                bottomMargin = dpToPx(3)
             }
             text = "Seguí viendo"
-            // Set to 16sp per requirement for rail titles
             textSize = 16f
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -1046,14 +1042,12 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = dpToPx(72)
-                // No marginStart; first item offset handled by inner scroll start padding
+                // Set vertical spacing between rail rows to 5dp
+                topMargin = dpToPx(5)
             }
-            // Remove fractional padding; avoid clipping on focus scale
             setPaddingRelative(0, 0, 0, 0)
             clipToPadding = false
             clipChildren = false
-            // Prevent this section from stealing focus on load
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
@@ -1063,11 +1057,10 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Reduce vertical gap to 1dp between title and rail
-                bottomMargin = dpToPx(1)
+                // Set title-to-rail gap to 3dp
+                bottomMargin = dpToPx(3)
             }
             text = "Canales de TV"
-            // Set to 16sp per requirement for rail titles
             textSize = 16f
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
