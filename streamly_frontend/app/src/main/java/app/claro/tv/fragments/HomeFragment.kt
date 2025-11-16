@@ -3,6 +3,7 @@ package app.claro.tv.fragments
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,14 +17,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
-
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
-import app.claro.tv.BuildConfig
-import app.claro.tv.data.api.ApiClient
-import app.claro.tv.data.repository.ApiContentRepository
 import app.claro.tv.data.repository.ContentRepository
 import app.claro.tv.data.repository.FakeContentRepository
 import app.claro.tv.models.ContentItem
@@ -32,20 +30,18 @@ import app.claro.tv.viewmodel.HomeViewModel
 import app.claro.tv.viewmodel.HomeViewModelFactory
 import app.claro.tv.viewmodel.UiState
 import app.claro.tv.views.ContinueWatchingCard
-import app.claro.tv.views.TvChannelCard
 import app.claro.tv.views.TopNavBar
-import coil.load
-import androidx.compose.ui.platform.ComposeView
+import app.claro.tv.views.TvChannelCard
 
 /**
  * PUBLIC_INTERFACE
  * HomeFragment - The main home screen for the Android TV app.
  * Displays hero banner, Continue Watching rail, and TV Channels rail.
  * Implements D-pad navigation with proper focus management and overscan-safe layout.
- * 
+ *
  * Design based on AAF_inicio Copy 2 (screen 2001:3396) with pixel-accurate dimensions
  * for 1920x1080 resolution.
- * 
+ *
  * Now integrated with real API data via ViewModel and Repository pattern.
  */
 class HomeFragment : Fragment() {
@@ -58,16 +54,21 @@ class HomeFragment : Fragment() {
     private lateinit var tvChannelsLoadingView: View
     private var topNavBarComposeView: ComposeView? = null
     private var topNavBarId: Int = View.NO_ID
-    
+    private var heroBannerView: View? = null
+    private var heroBannerId: Int = View.NO_ID
+
+    // Focus gate: disable rails until user presses DPAD_DOWN
+    private var railsFocusEnabled: Boolean = false
+
     private lateinit var viewModel: HomeViewModel
     private lateinit var repository: ContentRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Initialize repository - force fake data to disable all API/network calls
         repository = FakeContentRepository()
-        
+
         // Create ViewModel
         val factory = HomeViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[HomeViewModel::class.java]
@@ -109,13 +110,21 @@ class HomeFragment : Fragment() {
         setupContinueWatchingSection()
         setupTvChannelsSection()
 
+        // Initially gate rails until the user explicitly presses DPAD_DOWN
+        setRailsFocusable(false)
+
+        // After hero exists, route DOWN from nav to hero
+        if (heroBannerId != View.NO_ID) {
+            topNavBarComposeView?.nextFocusDownId = heroBannerId
+        }
+
         rootScrollView.addView(rootContainer)
         return rootScrollView
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        
+
         // Request initial focus on the ComposeView containing TopNavBar
         // The TopNavBar Composable will internally request focus on the search icon
         view.post {
@@ -127,13 +136,23 @@ class HomeFragment : Fragment() {
                 composeView.requestFocus()
             }
         }
-        
+
         // Observe ViewModel state changes
         observeViewModelStates()
-        
+
         // Load initial data
         viewModel.loadContinueWatching()
         viewModel.loadTvChannels()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Ensure nav regains focus when returning to the screen
+        topNavBarComposeView?.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            post { requestFocus() }
+        }
     }
 
     /**
@@ -156,7 +175,7 @@ class HomeFragment : Fragment() {
                 }
             }
         }
-        
+
         // Observe TV Channels state
         viewModel.tvChannelsState.observe(viewLifecycleOwner) { state ->
             when (state) {
@@ -216,7 +235,7 @@ class HomeFragment : Fragment() {
             "$message\nTap to retry",
             Toast.LENGTH_LONG
         ).show()
-        
+
         // Auto-retry after showing error
         view?.postDelayed({
             if (isForContinueWatching) {
@@ -232,26 +251,32 @@ class HomeFragment : Fragment() {
      */
     private fun updateContinueWatchingRail(items: List<ContentItem>) {
         continueWatchingRail.removeAllViews()
-        
-        items.forEach { item ->
-            val card = ContinueWatchingCard(requireContext())
-            // Ensure upward focus moves to TopNavBar
-            if (topNavBarId != View.NO_ID) {
-                card.nextFocusUpId = topNavBarId
+
+        var firstCardId: Int = View.NO_ID
+
+        items.forEachIndexed { index, item ->
+            val card = ContinueWatchingCard(requireContext()).apply {
+                // Give each card a stable view id for focus routing
+                id = View.generateViewId()
+                // Ensure upward focus moves to TopNavBar
+                if (topNavBarId != View.NO_ID) {
+                    nextFocusUpId = topNavBarId
+                }
+                // Respect current rails focus gate
+                isFocusable = railsFocusEnabled
+                isFocusableInTouchMode = railsFocusEnabled
+            }
+            if (index == 0) {
+                firstCardId = card.id
             }
             card.bind(item)
-            
-            // Load image with Coil if URL is available
-            if (item.thumbnailUrl.isNotEmpty()) {
-                // Note: Card needs to expose ImageView for Coil to load into
-                // For now, Coil integration happens inside the card's bind method
-            }
-            
             continueWatchingRail.addView(card)
         }
-        
-        // Make cards focusable but don't steal initial focus
-        continueWatchingRail.getChildAt(0)?.isFocusable = true
+
+        // Route DOWN from hero banner to the first continue watching card (if available)
+        if (firstCardId != View.NO_ID) {
+            heroBannerView?.nextFocusDownId = firstCardId
+        }
     }
 
     /**
@@ -259,26 +284,22 @@ class HomeFragment : Fragment() {
      */
     private fun updateTvChannelsRail(channels: List<TvChannel>) {
         tvChannelsRail.removeAllViews()
-        
+
         channels.forEach { channel ->
-            val card = TvChannelCard(requireContext())
-            // Ensure upward focus moves to TopNavBar
-            if (topNavBarId != View.NO_ID) {
-                card.nextFocusUpId = topNavBarId
+            val card = TvChannelCard(requireContext()).apply {
+                // Give each card a stable view id for focus routing
+                id = View.generateViewId()
+                // Ensure upward focus moves to TopNavBar
+                if (topNavBarId != View.NO_ID) {
+                    nextFocusUpId = topNavBarId
+                }
+                // Respect current rails focus gate
+                isFocusable = railsFocusEnabled
+                isFocusableInTouchMode = railsFocusEnabled
             }
             card.bind(channel)
-            
-            // Load image with Coil if URL is available
-            if (channel.thumbnailUrl.isNotEmpty()) {
-                // Note: Card needs to expose ImageView for Coil to load into
-                // For now, Coil integration happens inside the card's bind method
-            }
-            
             tvChannelsRail.addView(card)
         }
-        
-        // Make cards focusable but don't steal initial focus
-        tvChannelsRail.getChildAt(0)?.isFocusable = true
     }
 
     /**
@@ -288,6 +309,7 @@ class HomeFragment : Fragment() {
      * - Horizontally centered
      * - Container modifier must be exactly the specified chain inside TopNavBar
      * - Initial focus on search icon
+     * - Arrow navigation LEFT/RIGHT cycles within the group; DOWN goes to hero
      */
     private fun addComposeTopNavBar() {
         // We mount a ComposeView above other sections with a top margin of 18dp from the root container top.
@@ -303,12 +325,22 @@ class HomeFragment : Fragment() {
                 bottomMargin = dpToPx(24)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
-            
+
             // Make ComposeView focusable so it can receive and delegate focus to Compose elements
             id = View.generateViewId()
             isFocusable = true
             isFocusableInTouchMode = true
-            
+
+            // Intercept DPAD_DOWN to open the focus gate for rails and move focus to hero
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+                    setRailsFocusable(true)
+                    heroBannerView?.requestFocus()
+                    return@setOnKeyListener true
+                }
+                false
+            }
+
             setContent {
                 // Use Material3 adapter to ensure typography tokens are available
                 androidx.compose.material3.MaterialTheme {
@@ -326,7 +358,7 @@ class HomeFragment : Fragment() {
                 }
             }
         }
-        
+
         // Store reference for focus management
         topNavBarComposeView = composeView
         topNavBarId = composeView.id
@@ -349,7 +381,11 @@ class HomeFragment : Fragment() {
             setBackgroundColor(Color.parseColor("#2d2d2d"))
             isFocusable = true
             isFocusableInTouchMode = true
+            id = View.generateViewId()
         }
+
+        heroBannerId = heroBanner.id
+        heroBannerView = heroBanner
 
         // Hero content placeholder
         val heroText = TextView(requireContext()).apply {
@@ -367,6 +403,11 @@ class HomeFragment : Fragment() {
         // Ensure DPAD_UP from hero goes back to nav bar if available
         if (topNavBarId != View.NO_ID) {
             heroBanner.nextFocusUpId = topNavBarId
+        }
+
+        // Route DOWN from nav to hero as soon as hero exists
+        if (heroBannerId != View.NO_ID) {
+            topNavBarComposeView?.nextFocusDownId = heroBannerId
         }
 
         // Focus effect for hero banner
@@ -436,6 +477,10 @@ class HomeFragment : Fragment() {
             isHorizontalScrollBarEnabled = false
             // Prevent scroll view from stealing focus
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            // Route UP into the TopNavBar if user navigates upwards from within the rail
+            if (topNavBarId != View.NO_ID) {
+                nextFocusUpId = topNavBarId
+            }
         }
 
         continueWatchingRail = LinearLayout(requireContext()).apply {
@@ -444,8 +489,9 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            // Prevent rail from stealing focus
+            // Prevent rail from stealing focus initially; gating is handled separately
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }
 
         scrollView.addView(continueWatchingRail)
@@ -509,6 +555,10 @@ class HomeFragment : Fragment() {
             isHorizontalScrollBarEnabled = false
             // Prevent scroll view from stealing focus
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            // Route UP into the TopNavBar if user navigates upwards from within the rail
+            if (topNavBarId != View.NO_ID) {
+                nextFocusUpId = topNavBarId
+            }
         }
 
         tvChannelsRail = LinearLayout(requireContext()).apply {
@@ -517,8 +567,9 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            // Prevent rail from stealing focus
+            // Prevent rail from stealing focus initially; gating is handled separately
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }
 
         scrollView.addView(tvChannelsRail)
@@ -526,6 +577,33 @@ class HomeFragment : Fragment() {
         sectionContainer.addView(tvChannelsLoadingView)
         sectionContainer.addView(scrollView)
         rootContainer.addView(sectionContainer)
+    }
+
+    /**
+     * Focus gate: enable or disable focus for rails. When disabled, rails won't receive focus until DOWN is pressed on nav.
+     */
+    private fun setRailsFocusable(enabled: Boolean) {
+        railsFocusEnabled = enabled
+
+        // Accessibility gating (hide descendants from focus/AT when disabled)
+        continueWatchingRail.importantForAccessibility =
+            if (enabled) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+            else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        tvChannelsRail.importantForAccessibility =
+            if (enabled) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+            else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+
+        // Update all existing child cards
+        for (i in 0 until continueWatchingRail.childCount) {
+            val child = continueWatchingRail.getChildAt(i)
+            child.isFocusable = enabled
+            child.isFocusableInTouchMode = enabled
+        }
+        for (i in 0 until tvChannelsRail.childCount) {
+            val child = tvChannelsRail.getChildAt(i)
+            child.isFocusable = enabled
+            child.isFocusableInTouchMode = enabled
+        }
     }
 
     private fun dpToPx(dp: Int): Int {
