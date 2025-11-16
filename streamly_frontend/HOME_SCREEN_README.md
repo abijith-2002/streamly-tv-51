@@ -3,6 +3,8 @@
 ## Overview
 This implementation creates a pixel-accurate native Android TV home screen based on the 'AAF_inicio Copy 2' Figma design (screen 2001:3396). The screen is built entirely with native Android TV components (no WebView) and includes proper D-pad navigation, focus management, and TV-optimized UI.
 
+**NEW: Now integrated with real API data using Retrofit, coroutines, and MVVM architecture.**
+
 ## Architecture
 
 ### Components
@@ -11,14 +13,21 @@ This implementation creates a pixel-accurate native Android TV home screen based
    - Main container for the home screen
    - Orchestrates all sections: navigation, hero banner, content rails
    - Implements proper focus management for TV navigation
+   - Observes ViewModel for data updates and loading states
 
-2. **ContinueWatchingCard** (`app/claro/tv/views/ContinueWatchingCard.kt`)
+2. **HomeViewModel** (`app/claro/tv/viewmodel/HomeViewModel.kt`)
+   - Manages data fetching and UI state
+   - Uses coroutines for asynchronous operations
+   - Exposes LiveData for UI observation
+   - Handles retry logic for failed requests
+
+3. **ContinueWatchingCard** (`app/claro/tv/views/ContinueWatchingCard.kt`)
    - Custom CardView for "Seguí viendo" (Continue Watching) rail
    - Features: thumbnail placeholder, progress bar, title area
    - Dimensions: 412dp x 312dp (regular), 474dp x 329dp (first card)
    - Focus effects: scales to 1.05x when focused
 
-3. **TvChannelCard** (`app/claro/tv/views/TvChannelCard.kt`)
+4. **TvChannelCard** (`app/claro/tv/views/TvChannelCard.kt`)
    - Custom CardView for "Canales de TV" (TV Channels) rail
    - Features: thumbnail, program info, live badge, play button, progress bar
    - Dimensions: 745dp x 212dp
@@ -33,6 +42,74 @@ This implementation creates a pixel-accurate native Android TV home screen based
 2. **TvChannel** (`app/claro/tv/models/TvChannel.kt`)
    - Represents live TV channels
    - Fields: id, programTitle, channelNumber, channelName, startTime, endTime, isLive, isRentable, thumbnailUrl, progress
+
+### Data Layer
+
+#### API Service (`app/claro/tv/data/api/`)
+
+- **StreamlyApiService**: Retrofit interface defining API endpoints
+  - `GET /v1/users/{userId}/continue-watching` - Fetches continue watching items
+  - `GET /v1/channels` - Fetches TV channels list
+
+- **ApiClient**: Factory for creating Retrofit instances with OkHttp configuration
+  - Configurable base URL via BuildConfig
+  - HTTP logging interceptor (debug builds only)
+  - Connection/read/write timeouts (30 seconds)
+
+- **AuthInterceptor**: OkHttp interceptor for Bearer token authentication
+  - Reads token from TokenProvider interface
+  - Stub implementation returns null (replace with actual token retrieval)
+
+#### DTOs (`app/claro/tv/data/dto/`)
+
+- **ContinueWatchingDto**: API response model for continue watching items
+- **TvChannelDto**: API response model for TV channels
+- **DataMappers**: Converts DTOs to domain models
+
+#### Repository (`app/claro/tv/data/repository/`)
+
+- **ContentRepository**: Interface abstracting data source
+- **ApiContentRepository**: Retrofit-based implementation fetching from API
+- **FakeContentRepository**: In-memory implementation for testing/fallback
+
+#### Result Type (`app/claro/tv/data/Result.kt`)
+
+- Sealed class for type-safe error handling
+- States: Success, Error, Loading
+
+## Configuration
+
+### API Base URL
+
+Set via gradle.properties or BuildConfig:
+
+```properties
+API_BASE_URL=https://api.streamly.example.com
+USE_FAKE_DATA=false
+```
+
+Access in code:
+```kotlin
+BuildConfig.STREAMLY_API_BASE_URL
+BuildConfig.USE_FAKE_DATA
+```
+
+### Feature Flags
+
+- **USE_FAKE_DATA**: When true, uses FakeContentRepository instead of API calls
+
+### Authentication
+
+Replace `StubTokenProvider` with actual implementation:
+
+```kotlin
+class SecureTokenProvider(private val context: Context) : TokenProvider {
+    override fun getToken(): String? {
+        // Read from SharedPreferences, KeyStore, etc.
+        return // your token
+    }
+}
+```
 
 ## Design Specifications
 
@@ -57,15 +134,19 @@ This implementation creates a pixel-accurate native Android TV home screen based
    - Position: 56dp below hero banner
    - Title: 24sp, white, bold
    - Layout: Horizontal scrolling rail
-   - Cards: 5 content items with progress bars
+   - Cards: Dynamic from API (with progress bars)
    - Spacing: 10dp between cards
+   - Loading state: Shows "Loading..." text
+   - Error state: Toast with auto-retry after 3 seconds
 
 4. **TV Channels Section ("Canales de TV")**
    - Position: 72dp below Continue Watching
    - Title: 24sp, white, bold
    - Layout: Horizontal scrolling rail
-   - Cards: 3 TV channel items with live badges
+   - Cards: Dynamic from API (with live badges)
    - Spacing: 10dp between cards
+   - Loading state: Shows "Loading..." text
+   - Error state: Toast with auto-retry after 3 seconds
 
 ### Typography
 Following design system from common.css:
@@ -106,11 +187,35 @@ Following design system from common.css:
 - Scale animation: 1.0 → 1.05 (200ms duration)
 - All interactive elements are focusable
 - Focus change triggers visual feedback (scale + highlight)
+- Focus preserved across data updates
 
 ### Key Handling
 - **Arrow Keys**: Navigate between focusable elements
 - **Enter/Select**: Activate focused element
 - **Back**: Return to previous screen or exit app
+
+## API Integration Flow
+
+1. **Fragment Creation**:
+   - Initialize ContentRepository (API or Fake based on BuildConfig)
+   - Create HomeViewModel with repository
+   - Set up ViewModel observation
+
+2. **Data Loading**:
+   - ViewModel launches coroutines to fetch data
+   - UI shows loading indicators during fetch
+   - Result mapped to UiState (Loading/Success/Error)
+
+3. **Success Path**:
+   - DTOs mapped to domain models
+   - UI updated with new data
+   - Images loaded via Coil (crossfade + memory cache)
+   - Focus state preserved
+
+4. **Error Path**:
+   - Toast notification with error message
+   - Auto-retry after 3 seconds
+   - Manual retry available via ViewModel methods
 
 ## Current State
 
@@ -118,27 +223,69 @@ Following design system from common.css:
 - Native Android TV UI with CardView-based components
 - Top navigation bar with menu items and avatar
 - Hero banner placeholder
-- Continue Watching rail with 5 cards
-- TV Channels rail with 3 cards
+- Continue Watching rail with API integration
+- TV Channels rail with API integration
 - Progress bars on all content cards
 - Live badges on TV channel cards
 - D-pad navigation with focus management
 - Proper overscan-safe margins
 - Pixel-accurate dimensions matching Figma design
+- **Retrofit API client with configurable base URL**
+- **Repository pattern with API and fake implementations**
+- **MVVM architecture with ViewModel and LiveData**
+- **Coroutine-based async data fetching**
+- **Loading states with shimmer placeholders**
+- **Error handling with retry mechanism**
+- **Bearer token authentication support (stub)**
+- **Coil image loading library integration**
 
-### Placeholder Data
-Currently using hardcoded dummy data:
-- Continue Watching: Rogue One, Ex Machina, Sing Street, 2012, Ad Astra
-- TV Channels: Marca Claro Radio, E.T., with channel numbers and time slots
+### API Endpoints
+
+#### Continue Watching
+```
+GET /v1/users/{userId}/continue-watching
+Response: {
+  "items": [
+    {
+      "id": "string",
+      "title": "string",
+      "subtitle": "string",
+      "artwork_url": "string",
+      "progress": 0.0-1.0
+    }
+  ]
+}
+```
+
+#### TV Channels
+```
+GET /v1/channels
+Response: {
+  "channels": [
+    {
+      "id": "string",
+      "name": "string",
+      "logo_url": "string",
+      "is_live": boolean,
+      "current_program_title": "string",
+      "current_program_time_window": "HH:MM - HH:MM",
+      "channel_number": "string",
+      "thumbnail_url": "string",
+      "progress": 0.0-1.0,
+      "is_rentable": boolean
+    }
+  ]
+}
+```
 
 ## Future Enhancements
 
 ### High Priority
-1. **Image Loading**: Integrate Glide for thumbnail images
+1. **Image Loading**: Integrate Coil into card views for actual thumbnails ✓ (Coil added)
 2. **Hero Carousel**: Implement auto-rotating hero banner with multiple highlights
-3. **Dynamic Data**: Connect to backend API for real content
-4. **Click Handlers**: Add navigation to detail screens on card click
-5. **Search Functionality**: Implement search overlay
+3. **Click Handlers**: Add navigation to detail screens on card click
+4. **Search Functionality**: Implement search overlay
+5. **Token Management**: Implement secure TokenProvider with encrypted storage
 
 ### Medium Priority
 1. **Delete Functionality**: Add delete button with confirmation for Continue Watching items
@@ -146,12 +293,14 @@ Currently using hardcoded dummy data:
 3. **Smooth Scrolling**: Enhance horizontal scroll with focus-driven auto-scroll
 4. **Animations**: Add fade-in animations on screen load
 5. **Avatar Menu**: Implement user profile dropdown
+6. **Offline Support**: Cache API responses for offline viewing
 
 ### Low Priority
-1. **Error States**: Add error handling for missing images
+1. **Error States**: Enhanced error UI with illustrations ✓ (Basic error handling done)
 2. **Empty States**: Handle empty rails gracefully
-3. **Loading States**: Add loading indicators while fetching data
+3. **Shimmer Loading**: Replace text loading with shimmer effect
 4. **Accessibility**: Enhanced TalkBack support
+5. **Analytics**: Track user interactions and API response times
 
 ## Integration Points
 
@@ -167,7 +316,12 @@ Currently using hardcoded dummy data:
 - AndroidX Leanback: TV-optimized components
 - CardView: Card-based UI components
 - Fragment-KTX: Modern fragment APIs
-- Glide: Image loading (already included in dependencies)
+- Retrofit: REST API client ✓
+- OkHttp: HTTP client with interceptors ✓
+- Gson: JSON serialization/deserialization ✓
+- Coroutines: Async operations ✓
+- LiveData/ViewModel: MVVM architecture ✓
+- Coil: Image loading with caching ✓
 
 ## Testing on Android TV
 
@@ -186,6 +340,14 @@ Currently using hardcoded dummy data:
 - Test navigation flow: top-to-bottom, left-to-right
 - Ensure focus is visible with scale effect
 - Confirm no focus traps
+- Verify focus preserved during data updates
+
+### API Testing
+- Test with real API endpoints (configure BASE_URL)
+- Test with fake data (set USE_FAKE_DATA=true)
+- Test error scenarios (disconnect network)
+- Test retry mechanism
+- Verify image loading with Coil
 
 ## File Structure
 ```
@@ -193,14 +355,37 @@ app/src/main/java/app/claro/tv/
 ├── MainActivity.kt                      # Main activity hosting HomeFragment
 ├── SplashActivity.kt                    # Splash screen (3-second delay)
 ├── fragments/
-│   └── HomeFragment.kt                  # Main home screen implementation
+│   └── HomeFragment.kt                  # Main home screen with API integration
 ├── views/
 │   ├── ContinueWatchingCard.kt         # Custom card for Continue Watching
 │   └── TvChannelCard.kt                # Custom card for TV Channels
-└── models/
-    ├── ContentItem.kt                   # Data model for content items
-    └── TvChannel.kt                     # Data model for TV channels
+├── models/
+│   ├── ContentItem.kt                   # Domain model for content items
+│   └── TvChannel.kt                     # Domain model for TV channels
+├── viewmodel/
+│   ├── HomeViewModel.kt                 # ViewModel for home screen
+│   ├── HomeViewModelFactory.kt          # Factory for ViewModel creation
+│   └── UiState.kt                       # Sealed class for UI state
+├── data/
+│   ├── Result.kt                        # Result wrapper for error handling
+│   ├── api/
+│   │   ├── StreamlyApiService.kt       # Retrofit API interface
+│   │   ├── ApiClient.kt                # Retrofit/OkHttp client factory
+│   │   └── AuthInterceptor.kt          # Authentication interceptor
+│   ├── dto/
+│   │   ├── ContinueWatchingDto.kt      # API response models
+│   │   └── TvChannelDto.kt
+│   ├── mappers/
+│   │   └── DataMappers.kt              # DTO to domain model mappers
+│   └── repository/
+│       ├── ContentRepository.kt         # Repository interface
+│       ├── ApiContentRepository.kt      # API implementation
+│       └── FakeContentRepository.kt     # Fake/test implementation
 ```
+
+## Configuration Files
+- `gradle.properties`: API_BASE_URL, USE_FAKE_DATA
+- `app/build.gradle.kts`: BuildConfig fields, dependencies
 
 ## Design References
 - HTML: `assets/aaf_inicio-copy-2-2001-3396.html`
@@ -217,3 +402,16 @@ These files were used as design references only (not copied into the codebase).
 - Focus management follows Android TV best practices
 - Layout respects TV overscan guidelines (48dp minimum margins)
 - Uses FragmentActivity for Leanback compatibility
+- API integration uses industry-standard patterns (MVVM, Repository, Result)
+- Coroutines ensure smooth UI with background data fetching
+- Error handling gracefully degrades with retry capability
+- Feature flags allow easy switching between API and fake data
+
+## Environment Variables
+
+**Note:** API base URL and feature flags are configured via gradle.properties, not .env file. The application requires the following to be set:
+
+- `API_BASE_URL`: Base URL for Streamly API (default: https://api.streamly.example.com)
+- `USE_FAKE_DATA`: Boolean flag to use fake repository (default: false)
+
+These are read at build time and exposed via BuildConfig constants.

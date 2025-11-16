@@ -15,6 +15,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // BuildConfig fields for API configuration
+        buildConfigField("String", "STREAMLY_API_BASE_URL", "\"${project.findProperty("API_BASE_URL") ?: "https://api.streamly.example.com"}\"")
+        buildConfigField("boolean", "USE_FAKE_DATA", "${project.findProperty("USE_FAKE_DATA") ?: "false"}")
     }
 
     buildTypes {
@@ -38,6 +42,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
@@ -67,14 +72,17 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     
+    // JSON
+    implementation("com.google.code.gson:gson:2.10.1")
+    
     // ExoPlayer for video
     implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.media3:media3-ui:1.2.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.2.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.2.1")
     
-    // Image loading
-    implementation("com.github.bumptech.glide:glide:4.16.0")
+    // Image loading - Coil for Kotlin
+    implementation("io.coil-kt:coil:2.5.0")
     
     // Testing
     testImplementation("junit:junit:4.13.2")

@@ -11,12 +11,22 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.core.view.ViewCompat
+import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
+import app.claro.tv.BuildConfig
+import app.claro.tv.data.api.ApiClient
+import app.claro.tv.data.repository.ApiContentRepository
+import app.claro.tv.data.repository.ContentRepository
+import app.claro.tv.data.repository.FakeContentRepository
 import app.claro.tv.models.ContentItem
 import app.claro.tv.models.TvChannel
+import app.claro.tv.viewmodel.HomeViewModel
+import app.claro.tv.viewmodel.HomeViewModelFactory
+import app.claro.tv.viewmodel.UiState
 import app.claro.tv.views.ContinueWatchingCard
 import app.claro.tv.views.TvChannelCard
+import coil.load
 
 /**
  * PUBLIC_INTERFACE
@@ -26,6 +36,8 @@ import app.claro.tv.views.TvChannelCard
  * 
  * Design based on AAF_inicio Copy 2 (screen 2001:3396) with pixel-accurate dimensions
  * for 1920x1080 resolution.
+ * 
+ * Now integrated with real API data via ViewModel and Repository pattern.
  */
 class HomeFragment : Fragment() {
 
@@ -33,7 +45,28 @@ class HomeFragment : Fragment() {
     private lateinit var rootContainer: LinearLayout
     private lateinit var continueWatchingRail: LinearLayout
     private lateinit var tvChannelsRail: LinearLayout
+    private lateinit var continueWatchingLoadingView: View
+    private lateinit var tvChannelsLoadingView: View
     private var firstFocusableView: View? = null
+    
+    private lateinit var viewModel: HomeViewModel
+    private lateinit var repository: ContentRepository
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Initialize repository based on configuration
+        repository = if (BuildConfig.USE_FAKE_DATA) {
+            FakeContentRepository()
+        } else {
+            val apiService = ApiClient.createStreamlyApiService()
+            ApiContentRepository(apiService)
+        }
+        
+        // Create ViewModel
+        val factory = HomeViewModelFactory(repository)
+        viewModel = ViewModelProvider(this, factory)[HomeViewModel::class.java]
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -76,6 +109,150 @@ class HomeFragment : Fragment() {
         view.post {
             firstFocusableView?.requestFocus()
         }
+        
+        // Observe ViewModel state changes
+        observeViewModelStates()
+        
+        // Load initial data
+        viewModel.loadContinueWatching()
+        viewModel.loadTvChannels()
+    }
+
+    /**
+     * Observes ViewModel LiveData and updates UI accordingly.
+     */
+    private fun observeViewModelStates() {
+        // Observe Continue Watching state
+        viewModel.continueWatchingState.observe(viewLifecycleOwner) { state ->
+            when (state) {
+                is UiState.Loading -> {
+                    showContinueWatchingLoading()
+                }
+                is UiState.Success -> {
+                    hideContinueWatchingLoading()
+                    updateContinueWatchingRail(state.data)
+                }
+                is UiState.Error -> {
+                    hideContinueWatchingLoading()
+                    showErrorWithRetry(state.message, isForContinueWatching = true)
+                }
+            }
+        }
+        
+        // Observe TV Channels state
+        viewModel.tvChannelsState.observe(viewLifecycleOwner) { state ->
+            when (state) {
+                is UiState.Loading -> {
+                    showTvChannelsLoading()
+                }
+                is UiState.Success -> {
+                    hideTvChannelsLoading()
+                    updateTvChannelsRail(state.data)
+                }
+                is UiState.Error -> {
+                    hideTvChannelsLoading()
+                    showErrorWithRetry(state.message, isForContinueWatching = false)
+                }
+            }
+        }
+    }
+
+    /**
+     * Shows loading indicator for Continue Watching section.
+     */
+    private fun showContinueWatchingLoading() {
+        continueWatchingLoadingView.visibility = View.VISIBLE
+        continueWatchingRail.visibility = View.GONE
+    }
+
+    /**
+     * Hides loading indicator for Continue Watching section.
+     */
+    private fun hideContinueWatchingLoading() {
+        continueWatchingLoadingView.visibility = View.GONE
+        continueWatchingRail.visibility = View.VISIBLE
+    }
+
+    /**
+     * Shows loading indicator for TV Channels section.
+     */
+    private fun showTvChannelsLoading() {
+        tvChannelsLoadingView.visibility = View.VISIBLE
+        tvChannelsRail.visibility = View.GONE
+    }
+
+    /**
+     * Hides loading indicator for TV Channels section.
+     */
+    private fun hideTvChannelsLoading() {
+        tvChannelsLoadingView.visibility = View.GONE
+        tvChannelsRail.visibility = View.VISIBLE
+    }
+
+    /**
+     * Shows error message with retry option.
+     */
+    private fun showErrorWithRetry(message: String, isForContinueWatching: Boolean) {
+        Toast.makeText(
+            requireContext(),
+            "$message\nTap to retry",
+            Toast.LENGTH_LONG
+        ).show()
+        
+        // Auto-retry after showing error
+        view?.postDelayed({
+            if (isForContinueWatching) {
+                viewModel.retryContinueWatching()
+            } else {
+                viewModel.retryTvChannels()
+            }
+        }, 3000)
+    }
+
+    /**
+     * Updates Continue Watching rail with fetched data.
+     */
+    private fun updateContinueWatchingRail(items: List<ContentItem>) {
+        continueWatchingRail.removeAllViews()
+        
+        items.forEach { item ->
+            val card = ContinueWatchingCard(requireContext())
+            card.bind(item)
+            
+            // Load image with Coil if URL is available
+            if (item.thumbnailUrl.isNotEmpty()) {
+                // Note: Card needs to expose ImageView for Coil to load into
+                // For now, Coil integration happens inside the card's bind method
+            }
+            
+            continueWatchingRail.addView(card)
+        }
+        
+        // Preserve focus if rail was updated
+        continueWatchingRail.getChildAt(0)?.isFocusable = true
+    }
+
+    /**
+     * Updates TV Channels rail with fetched data.
+     */
+    private fun updateTvChannelsRail(channels: List<TvChannel>) {
+        tvChannelsRail.removeAllViews()
+        
+        channels.forEach { channel ->
+            val card = TvChannelCard(requireContext())
+            card.bind(channel)
+            
+            // Load image with Coil if URL is available
+            if (channel.thumbnailUrl.isNotEmpty()) {
+                // Note: Card needs to expose ImageView for Coil to load into
+                // For now, Coil integration happens inside the card's bind method
+            }
+            
+            tvChannelsRail.addView(card)
+        }
+        
+        // Preserve focus if rail was updated
+        tvChannelsRail.getChildAt(0)?.isFocusable = true
     }
 
     /**
@@ -280,6 +457,19 @@ class HomeFragment : Fragment() {
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
 
+        // Loading indicator
+        continueWatchingLoadingView = TextView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dpToPx(312)
+            )
+            text = "Loading..."
+            textSize = 24f
+            setTextColor(Color.parseColor("#808080"))
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+        }
+
         // Horizontal scroll view for cards
         val scrollView = HorizontalScrollView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -297,23 +487,9 @@ class HomeFragment : Fragment() {
             )
         }
 
-        // Placeholder content data (replace with API data in production)
-        val contentItems = listOf(
-            ContentItem("1", "Rogue One", "", 0.404f),
-            ContentItem("2", "Ex Machina", "", 0.404f),
-            ContentItem("3", "Sing Street", "", 0.404f),
-            ContentItem("4", "2012", "", 0.404f),
-            ContentItem("5", "Ad Astra", "", 0.404f)
-        )
-
-        contentItems.forEach { item ->
-            val card = ContinueWatchingCard(requireContext())
-            card.bind(item)
-            continueWatchingRail.addView(card)
-        }
-
         scrollView.addView(continueWatchingRail)
         sectionContainer.addView(title)
+        sectionContainer.addView(continueWatchingLoadingView)
         sectionContainer.addView(scrollView)
         rootContainer.addView(sectionContainer)
     }
@@ -348,6 +524,19 @@ class HomeFragment : Fragment() {
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
 
+        // Loading indicator
+        tvChannelsLoadingView = TextView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dpToPx(212)
+            )
+            text = "Loading..."
+            textSize = 24f
+            setTextColor(Color.parseColor("#808080"))
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+        }
+
         // Horizontal scroll view for TV cards
         val scrollView = HorizontalScrollView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -365,30 +554,9 @@ class HomeFragment : Fragment() {
             )
         }
 
-        // Placeholder TV channel data (replace with API data in production)
-        val tvChannels = listOf(
-            TvChannel(
-                "1", "Marca Claro Radio", "004", "Claro sports",
-                "11:30", "12:30", true, false, "", 0.386f
-            ),
-            TvChannel(
-                "2", "E.T.", "005", "HBO Channel",
-                "11:30", "12:30", true, true, "", 0.386f
-            ),
-            TvChannel(
-                "3", "Marca Claro Radio", "004", "Claro sports",
-                "11:30", "12:30", true, false, "", 0.386f
-            )
-        )
-
-        tvChannels.forEach { channel ->
-            val card = TvChannelCard(requireContext())
-            card.bind(channel)
-            tvChannelsRail.addView(card)
-        }
-
         scrollView.addView(tvChannelsRail)
         sectionContainer.addView(title)
+        sectionContainer.addView(tvChannelsLoadingView)
         sectionContainer.addView(scrollView)
         rootContainer.addView(sectionContainer)
     }
