@@ -1,10 +1,12 @@
-package com.example.streamly_frontend
+package app.claro.tv
 
 import org.junit.Test
 import org.junit.Assert.*
 
 /**
- * Example local unit test, which will execute on the development machine (host).
+ * PUBLIC_INTERFACE
+ * ExampleUnitTest
+ * Simple unit test to validate environment.
  */
 class ExampleUnitTest {
     @Test

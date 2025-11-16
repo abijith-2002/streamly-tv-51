@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "streamly_frontend"
+rootProject.name = "ClaroVideo"
 include(":app")

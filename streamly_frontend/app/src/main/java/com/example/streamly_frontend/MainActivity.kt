@@ -1,4 +1,4 @@
-package com.example.streamly_frontend
+package app.claro.tv
 
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
@@ -6,8 +6,13 @@ import android.view.KeyEvent
 import android.widget.TextView
 
 /**
- * Main Activity for Android TV
- * Extends FragmentActivity for Leanback compatibility
+ * PUBLIC_INTERFACE
+ * MainActivity
+ * The main/home screen activity for the Android TV app.
+ * Extends FragmentActivity for Leanback compatibility.
+ *
+ * Parameters: none
+ * Returns: none
  */
 class MainActivity : FragmentActivity() {
 
@@ -16,10 +21,10 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        
+
         titleText = findViewById(R.id.title_text)
-        titleText.text = "streamly_frontend"
-        
+        titleText.text = "Claro Video"
+
         // TODO: Initialize your rating screen components here
         // setupRatingOverlay()
     }

@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.streamly_frontend"
+    namespace = "app.claro.tv"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.streamly_frontend"
+        applicationId = "app.claro.tv"
         minSdk = 21
         targetSdk = 34
         versionCode = 1
