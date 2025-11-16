@@ -466,8 +466,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             ).apply {
-                // Slightly tightened nav-to-hero spacing for consistent vertical rhythm
-                topMargin = dpToPx(22)
+                // Slightly tightened nav-to-hero spacing for consistent vertical rhythm (22dp -> 20dp)
+                topMargin = dpToPx(20)
                 // Root container has 88dp start/end padding; use negative margins to allow full width bleed
                 marginStart = -dpToPx(88)
                 marginEnd = -dpToPx(88)
@@ -775,8 +775,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Reduced by 12dp to tighten spacing to hero (previously 56dp)
-                topMargin = dpToPx(44)
+                // Further reduced by 6dp to tighten spacing to hero while keeping focus scale safe (original 56dp -> 38dp)
+                topMargin = dpToPx(38)
             }
             // Prevent this section from stealing focus on load
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
