@@ -59,9 +59,31 @@ android {
             excludes += "META-INF/NOTICE*"
             excludes += "META-INF/DEPENDENCIES"
             excludes += "META-INF/ASL2.0"
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/*.version"
+            excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/gradle/incremental.annotation.processors"
+            excludes += "META-INF/LICENSE.md"
+            excludes += "META-INF/NOTICE.md"
+            excludes += "META-INF/LICENSE-notice*"
+            excludes += "META-INF/NOTICE.txt"
+            excludes += "META-INF/LICENSE.txt"
             // Kotlin module metadata sometimes surfaces as duplicates in app packaging
             excludes += "META-INF/*.kotlin_module"
         }
+    }
+
+    // Explicitly disable APK splits to avoid IncrementalSplitter crashes in certain CI/Docker setups
+    splits {
+        abi {
+            isEnable = false
+            reset()
+        }
+        density {
+            isEnable = false
+            reset()
+        }
+        // Note: language splits block is not supported in this configuration/AGP; omit it.
     }
 }
 

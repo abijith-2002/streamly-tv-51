@@ -1,4 +1,8 @@
-// Top-level build file
+/**
+ * Top-level build file
+ * Note: Gradle wrapper (8.7) and AGP (8.3.0) are compatible. Compose compiler extension 1.5.8
+ * is compatible with Kotlin 1.9.22. No version changes required for packaging stability.
+ */
 buildscript {
     repositories {
         google()
