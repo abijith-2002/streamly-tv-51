@@ -71,10 +71,12 @@ class HomeFragment : Fragment() {
     // Carousel sizing (dp)
     private val heroCardWidthDp: Int = 872
     private val heroCardHeightDp: Int = 222
+    private val heroCardSpacingDp: Int = 12 // spacing between cards for peeking
 
     // Derived px values (computed in setupHeroBanner / after layout)
     private var heroCardWidthPx: Int = 0
     private var heroCardHeightPx: Int = 0
+    private var heroCardSpacingPx: Int = 0
     private var heroCenterOffsetPx: Int = 0 // dynamically computed: (viewportWidth - cardWidth)/2 after layout
 
     private var heroCurrentIndex: Int = 0
@@ -440,6 +442,7 @@ class HomeFragment : Fragment() {
         // Compute card px values
         heroCardWidthPx = dpToPx(heroCardWidthDp)
         heroCardHeightPx = dpToPx(heroCardHeightDp)
+        heroCardSpacingPx = dpToPx(heroCardSpacingDp)
         heroCenterOffsetPx = 0 // will compute after layout from viewport width
 
         // Root hero container: full-bleed width (compensate rootContainer side paddings)
@@ -508,7 +511,7 @@ class HomeFragment : Fragment() {
         heroRail = rail
 
         // Create hero cards: exactly 872 x 222
-        heroTitles.forEach { title ->
+        heroTitles.forEachIndexed { idx, title ->
             val card = HeroCard(requireContext()).apply {
                 id = View.generateViewId()
                 layoutParams = LinearLayout.LayoutParams(
@@ -516,7 +519,7 @@ class HomeFragment : Fragment() {
                     heroCardHeightPx
                 ).apply {
                     // spacing between cards to retain peek visibility
-                    marginEnd = dpToPx(12)
+                    marginEnd = heroCardSpacingPx
                 }
                 // UP should go to top nav
                 if (topNavBarId != View.NO_ID) {
@@ -602,7 +605,13 @@ class HomeFragment : Fragment() {
             }
         }
 
-        val targetScrollX = (heroCurrentIndex * heroCardWidthPx - heroCenterOffsetPx).coerceAtLeast(0)
+        // Include spacing between cards when computing scroll distance
+        val unitWidth = heroCardWidthPx + heroCardSpacingPx
+        val rawScrollX = (heroCurrentIndex * unitWidth) - heroCenterOffsetPx
+
+        // Clamp to non-negative (HorizontalScrollView will handle right bound)
+        val targetScrollX = rawScrollX.coerceAtLeast(0)
+
         if (animate) {
             heroScrollView?.smoothScrollTo(targetScrollX, 0)
         } else {
