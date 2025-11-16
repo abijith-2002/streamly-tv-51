@@ -43,6 +43,11 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
 }
 
@@ -62,7 +67,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
-    
+
+    // Jetpack Compose
+    implementation("androidx.compose.ui:ui:1.6.5")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.6.5")
+    debugImplementation("androidx.compose.ui:ui-tooling:1.6.5")
+    implementation("androidx.compose.material3:material3:1.2.1")
+    implementation("androidx.compose.material:material-icons-extended:1.6.5")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     

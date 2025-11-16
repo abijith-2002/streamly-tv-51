@@ -12,6 +12,18 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.unit.dp
+
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import app.claro.tv.BuildConfig
@@ -26,7 +38,9 @@ import app.claro.tv.viewmodel.HomeViewModelFactory
 import app.claro.tv.viewmodel.UiState
 import app.claro.tv.views.ContinueWatchingCard
 import app.claro.tv.views.TvChannelCard
+import app.claro.tv.views.TopNavBar
 import coil.load
+import androidx.compose.ui.platform.ComposeView
 
 /**
  * PUBLIC_INTERFACE
@@ -55,13 +69,8 @@ class HomeFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Initialize repository based on configuration
-        repository = if (BuildConfig.USE_FAKE_DATA) {
-            FakeContentRepository()
-        } else {
-            val apiService = ApiClient.createStreamlyApiService()
-            ApiContentRepository(apiService)
-        }
+        // Initialize repository - force fake data to disable all API/network calls
+        repository = FakeContentRepository()
         
         // Create ViewModel
         val factory = HomeViewModelFactory(repository)
@@ -93,7 +102,9 @@ class HomeFragment : Fragment() {
             setPadding(dpToPx(88), dpToPx(36), dpToPx(88), dpToPx(48))
         }
 
-        setupTopNavigation()
+        // Compose Top Navigation - horizontally centered, 18dp from top
+        addComposeTopNavBar()
+
         setupHeroBanner()
         setupContinueWatchingSection()
         setupTvChannelsSection()
@@ -256,131 +267,43 @@ class HomeFragment : Fragment() {
     }
 
     /**
-     * Sets up the top navigation bar with app logo and menu items.
-     * Position: 88dp from left, 36dp from top (handled by container padding)
-     * Dimensions: Full width x 74dp height
+     * Adds the Compose TopNavBar to the rootContainer.
+     * Requirements:
+     * - 18dp from the top of the screen
+     * - Horizontally centered
+     * - Container modifier must be exactly the specified chain inside TopNavBar
      */
-    private fun setupTopNavigation() {
-        val navContainer = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
+    private fun addComposeTopNavBar() {
+        // We mount a ComposeView above other sections with a top margin of 18dp from the root container top.
+        val composeView = ComposeView(requireContext()).apply {
+            // Dispose composition to avoid leaks
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dpToPx(74)
-            )
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        // Logo placeholder (169.637dp x 34.356dp from design)
-        val logo = TextView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                dpToPx(170),
-                dpToPx(34)
-            )
-            text = "Claro Video"
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#2196F3"))
-            setPadding(dpToPx(8), 0, dpToPx(8), 0)
-        }
-
-        // Spacer to position navigation menu
-        val spacer = View(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                dpToPx(120),
-                0
-            )
-        }
-
-        // Navigation menu
-        val navMenu = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-            gravity = Gravity.START
-        }
-
-        val navItems = listOf("Inicio", "Películas", "Series", "TV en vivo", "Kids", "Mis Contenidos")
-        navItems.forEachIndexed { index, item ->
-            val navButton = TextView(requireContext()).apply {
-                text = item
-                textSize = 20f
-                setTextColor(if (index == 0) Color.WHITE else Color.parseColor("#b0b0b0"))
-                setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10))
-                isFocusable = true
-                isFocusableInTouchMode = true
-                setBackgroundColor(if (index == 0) Color.parseColor("#26ffffff") else Color.TRANSPARENT)
-                
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    marginEnd = dpToPx(24)
-                }
-
-                // Focus effect with scale animation
-                onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-                    animate()
-                        .scaleX(if (hasFocus) 1.05f else 1.0f)
-                        .scaleY(if (hasFocus) 1.05f else 1.0f)
-                        .setDuration(150)
-                        .start()
-                    
-                    if (hasFocus) {
-                        setTextColor(Color.WHITE)
-                        setBackgroundColor(Color.parseColor("#26ffffff"))
-                    } else if (index != 0) {
-                        setTextColor(Color.parseColor("#b0b0b0"))
-                        setBackgroundColor(Color.TRANSPARENT)
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                // 18dp from top of the screen; rootContainer has its own padding, so we only add top margin here
+                topMargin = dpToPx(18)
+                bottomMargin = dpToPx(24)
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+            setContent {
+                // Use Material3 adapter to ensure typography tokens are available
+                androidx.compose.material3.MaterialTheme {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        TopNavBar(
+                            // Click handlers are stubs
+                            onItemClick = { /* no-op for now */ }
+                        )
                     }
                 }
-
-                // Store first focusable view
-                if (index == 0 && firstFocusableView == null) {
-                    firstFocusableView = this
-                }
             }
-            navMenu.addView(navButton)
         }
-
-        // Avatar placeholder (56dp x 56dp)
-        val avatarContainer = FrameLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                dpToPx(74),
-                dpToPx(74)
-            )
-            isFocusable = true
-            isFocusableInTouchMode = true
-        }
-
-        val avatar = View(requireContext()).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                dpToPx(56),
-                dpToPx(56)
-            ).apply {
-                gravity = Gravity.CENTER
-            }
-            setBackgroundColor(Color.parseColor("#667eea"))
-        }
-        avatarContainer.addView(avatar)
-
-        // Avatar focus ring effect
-        avatarContainer.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            avatar.animate()
-                .scaleX(if (hasFocus) 1.1f else 1.0f)
-                .scaleY(if (hasFocus) 1.1f else 1.0f)
-                .setDuration(150)
-                .start()
-        }
-
-        navContainer.addView(logo)
-        navContainer.addView(spacer)
-        navContainer.addView(navMenu)
-        navContainer.addView(avatarContainer)
-        rootContainer.addView(navContainer)
+        rootContainer.addView(composeView)
     }
 
     /**
