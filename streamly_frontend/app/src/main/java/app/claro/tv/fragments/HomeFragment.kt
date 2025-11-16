@@ -387,8 +387,55 @@ class HomeFragment : Fragment() {
 
         // Route DOWN from every hero card to the first continue watching card (if available)
         if (firstCardId != View.NO_ID) {
+            // Primary path: static nextFocusDownId wiring
             heroBannerView?.nextFocusDownId = firstCardId
             heroCards.forEach { it.nextFocusDownId = firstCardId }
+
+            // Fallback: add DPAD_DOWN key intercept at hero container level in case nextFocusDownId
+            // cannot be resolved at dispatch time (e.g., due to late population or layout timing).
+            // We only set this once when we have a valid first card id.
+            heroScrollView?.setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+                    val target = view?.findViewById<View>(continueWatchingFirstCardId)
+                    if (target != null) {
+                        // Open rails focus gate and request focus on the first rail's first card
+                        setRailsFocusable(true)
+                        target.requestFocus()
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+
+            // Also add a fallback listener on each hero card to defensively handle DOWN presses
+            heroCards.forEach { card ->
+                card.setOnKeyListener { _, keyCode, event ->
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+                        val target = view?.findViewById<View>(continueWatchingFirstCardId)
+                        if (target != null) {
+                            setRailsFocusable(true)
+                            target.requestFocus()
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+            }
+        } else {
+            // If first rail isn't populated yet, defer wiring until layout pass completes
+            continueWatchingRail.post {
+                val targetId = continueWatchingFirstCardId.takeIf { it != View.NO_ID }
+                if (targetId != null) {
+                    heroBannerView?.nextFocusDownId = targetId
+                    heroCards.forEach { it.nextFocusDownId = targetId }
+                }
+            }
         }
     }
 
@@ -578,6 +625,16 @@ class HomeFragment : Fragment() {
                 ) {
                     pauseAutoScrollForUserInteraction()
                 }
+                // Fallback: if DOWN is pressed while focus is within hero, route to first rail
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+                    val targetId = continueWatchingFirstCardId
+                    val target = if (targetId != View.NO_ID) view?.findViewById<View>(targetId) else null
+                    if (target != null) {
+                        setRailsFocusable(true)
+                        target.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                }
                 // Never consume focus events if focus is outside hero; let them propagate
                 false
             }
@@ -697,6 +754,14 @@ class HomeFragment : Fragment() {
 
         // Add to root
         rootContainer.addView(container)
+
+        // Post a re-wiring step to set DOWN targets after layout/population if needed
+        container.post {
+            if (continueWatchingFirstCardId != View.NO_ID) {
+                heroBannerView?.nextFocusDownId = continueWatchingFirstCardId
+                heroCards.forEach { it.nextFocusDownId = continueWatchingFirstCardId }
+            }
+        }
 
         // After nav and hero exist, compute symmetric top spacing:
         // top edge-to-nav gap should equal nav-to-hero gap.
