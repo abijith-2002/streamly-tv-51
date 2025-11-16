@@ -373,10 +373,11 @@ class HomeFragment : Fragment() {
     private fun setupHeroBanner() {
         val heroBanner = FrameLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dpToPx(444)
+                dpToPx(872),
+                dpToPx(222)
             ).apply {
                 topMargin = dpToPx(42)
+                gravity = Gravity.CENTER_HORIZONTAL
             }
             setBackgroundColor(Color.parseColor("#2d2d2d"))
             isFocusable = true
