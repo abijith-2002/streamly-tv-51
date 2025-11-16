@@ -826,7 +826,8 @@ class HomeFragment : Fragment() {
                 bottomMargin = dpToPx(16)
             }
             text = "Seguí viendo"
-            textSize = 24f
+            // Set to 16sp per requirement for rail titles
+            textSize = 16f
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
@@ -905,7 +906,8 @@ class HomeFragment : Fragment() {
                 bottomMargin = dpToPx(16)
             }
             text = "Canales de TV"
-            textSize = 24f
+            // Set to 16sp per requirement for rail titles
+            textSize = 16f
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
