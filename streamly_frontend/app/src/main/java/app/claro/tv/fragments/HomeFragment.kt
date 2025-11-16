@@ -567,9 +567,13 @@ class HomeFragment : Fragment() {
                 // Ensure card keeps 0dp radius (already enforced in HeroCard) and re-center on focus
                 setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
+                        // On any focus gain (DPAD focus or selection change), align with same routine used by auto-scroll
                         val position = heroCards.indexOf(v as HeroCard).let { if (it >= 0) it else index }
                         pauseAutoScrollForUserInteraction()
-                        centerHeroAt(position, animate = true)
+                        // Guarantee centering after layout to avoid race conditions
+                        heroScrollView?.post {
+                            centerHeroAt(position, animate = true)
+                        }
                     }
                 }
 
@@ -590,6 +594,19 @@ class HomeFragment : Fragment() {
                                 keyCode == KeyEvent.KEYCODE_ENTER)
                     ) {
                         pauseAutoScrollForUserInteraction()
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                            // Determine next index similar to a pager navigation and center it
+                            val currentIdx = heroCards.indexOf(this@apply)
+                            if (currentIdx >= 0) {
+                                val delta = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+                                val nextIndex = (currentIdx + delta + heroCards.size) % heroCards.size
+                                heroScrollView?.post {
+                                    centerHeroAt(nextIndex, animate = true)
+                                    heroCards.getOrNull(nextIndex)?.requestFocus()
+                                }
+                                return@setOnKeyListener true
+                            }
+                        }
                     }
                     false
                 }
@@ -626,7 +643,9 @@ class HomeFragment : Fragment() {
                 heroScrollView?.clipToPadding = false
                 heroScrollView?.clipChildren = false
                 // Always keep current card centered after layout changes
-                centerHeroAt(heroCurrentIndex, animate = false)
+                heroScrollView?.post {
+                    centerHeroAt(heroCurrentIndex, animate = false)
+                }
             }
         }
 
@@ -644,7 +663,9 @@ class HomeFragment : Fragment() {
                 heroScrollView?.clipChildren = false
 
                 // Initially center the first card with symmetric peeking (34dp)
-                centerHeroAt(heroCurrentIndex, animate = false)
+                heroScrollView?.post {
+                    centerHeroAt(heroCurrentIndex, animate = false)
+                }
             }
         }
 
@@ -666,7 +687,11 @@ class HomeFragment : Fragment() {
 
         val h = heroScrollView ?: return
         val viewportWidth = h.width
-        if (viewportWidth <= 0) return
+        if (viewportWidth <= 0) {
+            // Defer until after layout to avoid race conditions
+            h.post { centerHeroAt(index, animate) }
+            return
+        }
 
         // Ensure side padding honors 34dp peeks on both sides
         if (heroSidePaddingPx <= 0) {
