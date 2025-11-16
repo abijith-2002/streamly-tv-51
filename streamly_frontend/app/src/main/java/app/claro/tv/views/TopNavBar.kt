@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.border
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.focus.focusProperties
 import kotlinx.coroutines.delay
@@ -154,8 +155,13 @@ private fun FocusablePill(
     var focusableModifier = Modifier
         .wrapContentWidth()
         .height(26.5.dp)
-        .padding(horizontal = 12.dp) // include horizontal padding inside pill width
         .background(color = focusBackgroundColor, shape = pillShape)
+        // Temporary debug border to verify focus state; remove after validation
+        .then(
+            if (focused) Modifier.border(width = 1.dp, color = Color.White, shape = pillShape)
+            else Modifier
+        )
+        .padding(horizontal = 12.dp) // include horizontal padding inside pill width
     
     // Apply focus requester if provided (for search icon)
     if (focusRequester != null) {
