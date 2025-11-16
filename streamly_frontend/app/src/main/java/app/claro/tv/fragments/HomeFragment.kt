@@ -812,7 +812,11 @@ class HomeFragment : Fragment() {
             ).apply {
                 // Further reduced by 6dp to tighten spacing to hero while keeping focus scale safe (original 56dp -> 38dp)
                 topMargin = dpToPx(38)
+                // Apply start-aware offset for entire rail container (title + rail) to 28.5dp
+                marginStart = dpToPx(28)
             }
+            // Add fractional .5dp via start padding to avoid rounding loss in integer px conversion
+            setPaddingRelative(dpToPxF(0.5f), 0, 0, 0)
             // Prevent this section from stealing focus on load
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
@@ -823,8 +827,7 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Use start-aware margin to respect RTL
-                marginStart = dpToPx(44)
+                // Title now inherits container offset; keep only bottom spacing
                 bottomMargin = dpToPx(16)
             }
             text = "Seguí viendo"
@@ -894,7 +897,11 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
                 topMargin = dpToPx(72)
+                // Apply start-aware offset for entire rail container (title + rail) to 28.5dp
+                marginStart = dpToPx(28)
             }
+            // Add fractional .5dp via start padding to avoid rounding loss in integer px conversion
+            setPaddingRelative(dpToPxF(0.5f), 0, 0, 0)
             // Prevent this section from stealing focus on load
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
@@ -905,8 +912,7 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Use start-aware margin to respect RTL
-                marginStart = dpToPx(44)
+                // Title now inherits container offset; keep only bottom spacing
                 bottomMargin = dpToPx(16)
             }
             text = "Canales de TV"
@@ -991,6 +997,11 @@ class HomeFragment : Fragment() {
     }
 
     private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
+
+    // Helper for fractional dp needs (e.g., 0.5dp)
+    private fun dpToPxF(dp: Float): Int {
         return (dp * resources.displayMetrics.density).toInt()
     }
 }
