@@ -384,7 +384,8 @@ class HomeFragment : Fragment() {
             ).apply {
                 // 18dp from top of the screen; rootContainer has its own padding, so we only add top margin here
                 topMargin = dpToPx(18)
-                bottomMargin = dpToPx(24)
+                // Reduce bottom margin to tighten spacing to hero (24dp -> 12dp)
+                bottomMargin = dpToPx(12)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
 
@@ -456,7 +457,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             ).apply {
-                topMargin = dpToPx(42)
+                // Reduce spacing between nav and hero (42dp -> 30dp)
+                topMargin = dpToPx(30)
                 // Root container has 88dp start/end padding; use negative margins to allow full width bleed
                 marginStart = -dpToPx(88)
                 marginEnd = -dpToPx(88)
