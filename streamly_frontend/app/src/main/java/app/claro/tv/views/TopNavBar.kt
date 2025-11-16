@@ -24,9 +24,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
@@ -43,21 +46,38 @@ import androidx.compose.ui.unit.dp
  * - Items in order: Search icon, "Inicio", "Peliculas", "Series", "TV en vivo", "Kids", "Mis Contenidos"
  * - Even spacing within 579.5.dp width, D-pad focusable with visible focus feedback.
  * - Focus state: pill-shaped background (#9B0F0F), height 26.5dp, width wrapping content, corner radius 18.5dp
+ * - Initial focus targets the search icon
  *
  * Params:
  * - onItemClick: stub click handler for each item, index based (0 = search)
+ * - requestInitialFocus: when true, requests focus on the search icon
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TopNavBar(
     modifier: Modifier = Modifier,
-    onItemClick: (index: Int) -> Unit = {}
+    onItemClick: (index: Int) -> Unit = {},
+    requestInitialFocus: Boolean = true
 ) {
     // Items including search as first logical element
     val labels = listOf(
         "SEARCH_ICON",
         "Inicio", "Peliculas", "Series", "TV en vivo", "Kids", "Mis Contenidos"
     )
+
+    // Focus requester for search icon (first item)
+    val searchFocusRequester = remember { FocusRequester() }
+
+    // Request initial focus on search icon
+    LaunchedEffect(requestInitialFocus) {
+        if (requestInitialFocus) {
+            try {
+                searchFocusRequester.requestFocus()
+            } catch (e: IllegalStateException) {
+                // Ignore if focus requester is not yet attached
+            }
+        }
+    }
 
     // Container: EXACT modifier chain as requested
     val containerShape = RoundedCornerShape(size = 17.dp)
@@ -79,17 +99,19 @@ fun TopNavBar(
             // Create 7 focusable items (icon + 6 text items)
             labels.forEachIndexed { index, label ->
                 if (index == 0) {
-                    // Search Icon item
+                    // Search Icon item with focus requester
                     FocusablePill(
                         isIcon = true,
                         label = null,
-                        onClick = { onItemClick(0) }
+                        onClick = { onItemClick(0) },
+                        focusRequester = searchFocusRequester
                     )
                 } else {
                     FocusablePill(
                         isIcon = false,
                         label = label,
-                        onClick = { onItemClick(index) }
+                        onClick = { onItemClick(index) },
+                        focusRequester = null
                     )
                 }
                 if (index < labels.lastIndex) {
@@ -110,7 +132,8 @@ fun TopNavBar(
 private fun FocusablePill(
     isIcon: Boolean,
     label: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    focusRequester: FocusRequester?
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     var focused by remember { mutableStateOf(false) }
@@ -121,10 +144,17 @@ private fun FocusablePill(
     // Pill shape with corner radius 18.5dp
     val pillShape = RoundedCornerShape(18.5.dp)
 
-    val focusableModifier = Modifier
+    var focusableModifier = Modifier
         .wrapContentWidth()
         .height(26.5.dp)
         .background(color = focusBackgroundColor, shape = pillShape)
+    
+    // Apply focus requester if provided (for search icon)
+    if (focusRequester != null) {
+        focusableModifier = focusableModifier.focusRequester(focusRequester)
+    }
+    
+    focusableModifier = focusableModifier
         .focusable(interactionSource = interactionSource)
         .onFocusChanged { state -> focused = state.hasFocus }
         .onKeyEvent { keyEvent ->

@@ -14,11 +14,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -61,7 +56,7 @@ class HomeFragment : Fragment() {
     private lateinit var tvChannelsRail: LinearLayout
     private lateinit var continueWatchingLoadingView: View
     private lateinit var tvChannelsLoadingView: View
-    private var firstFocusableView: View? = null
+    private var topNavBarComposeView: ComposeView? = null
     
     private lateinit var viewModel: HomeViewModel
     private lateinit var repository: ContentRepository
@@ -89,6 +84,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             isVerticalScrollBarEnabled = false
+            // Prevent scroll view from intercepting D-pad events initially
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         rootContainer = LinearLayout(requireContext()).apply {
@@ -100,6 +97,8 @@ class HomeFragment : Fragment() {
             setBackgroundColor(Color.parseColor("#121212"))
             // Overscan-safe padding: 88dp left/right, 36dp top, 48dp bottom
             setPadding(dpToPx(88), dpToPx(36), dpToPx(88), dpToPx(48))
+            // Allow descendants to be focused
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         // Compose Top Navigation - horizontally centered, 18dp from top
@@ -116,9 +115,16 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        // Set initial focus to the first navigation item
+        // Request initial focus on the ComposeView containing TopNavBar
+        // The TopNavBar Composable will internally request focus on the search icon
         view.post {
-            firstFocusableView?.requestFocus()
+            topNavBarComposeView?.let { composeView ->
+                // Make the ComposeView focusable and request focus
+                // This will trigger the LaunchedEffect in TopNavBar to focus the search icon
+                composeView.isFocusable = true
+                composeView.isFocusableInTouchMode = false
+                composeView.requestFocus()
+            }
         }
         
         // Observe ViewModel state changes
@@ -239,7 +245,7 @@ class HomeFragment : Fragment() {
             continueWatchingRail.addView(card)
         }
         
-        // Preserve focus if rail was updated
+        // Make cards focusable but don't steal initial focus
         continueWatchingRail.getChildAt(0)?.isFocusable = true
     }
 
@@ -262,7 +268,7 @@ class HomeFragment : Fragment() {
             tvChannelsRail.addView(card)
         }
         
-        // Preserve focus if rail was updated
+        // Make cards focusable but don't steal initial focus
         tvChannelsRail.getChildAt(0)?.isFocusable = true
     }
 
@@ -272,6 +278,7 @@ class HomeFragment : Fragment() {
      * - 18dp from the top of the screen
      * - Horizontally centered
      * - Container modifier must be exactly the specified chain inside TopNavBar
+     * - Initial focus on search icon
      */
     private fun addComposeTopNavBar() {
         // We mount a ComposeView above other sections with a top margin of 18dp from the root container top.
@@ -287,6 +294,11 @@ class HomeFragment : Fragment() {
                 bottomMargin = dpToPx(24)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
+            
+            // Make ComposeView focusable so it can receive and delegate focus to Compose elements
+            isFocusable = true
+            isFocusableInTouchMode = false
+            
             setContent {
                 // Use Material3 adapter to ensure typography tokens are available
                 androidx.compose.material3.MaterialTheme {
@@ -297,12 +309,16 @@ class HomeFragment : Fragment() {
                     ) {
                         TopNavBar(
                             // Click handlers are stubs
-                            onItemClick = { /* no-op for now */ }
+                            onItemClick = { /* no-op for now */ },
+                            requestInitialFocus = true
                         )
                     }
                 }
             }
         }
+        
+        // Store reference for focus management
+        topNavBarComposeView = composeView
         rootContainer.addView(composeView)
     }
 
@@ -364,6 +380,8 @@ class HomeFragment : Fragment() {
             ).apply {
                 topMargin = dpToPx(56)
             }
+            // Prevent this section from stealing focus on load
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         // Section title
@@ -400,6 +418,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             isHorizontalScrollBarEnabled = false
+            // Prevent scroll view from stealing focus
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         continueWatchingRail = LinearLayout(requireContext()).apply {
@@ -408,6 +428,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
+            // Prevent rail from stealing focus
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         scrollView.addView(continueWatchingRail)
@@ -431,6 +453,8 @@ class HomeFragment : Fragment() {
             ).apply {
                 topMargin = dpToPx(72)
             }
+            // Prevent this section from stealing focus on load
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         // Section title
@@ -467,6 +491,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             isHorizontalScrollBarEnabled = false
+            // Prevent scroll view from stealing focus
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         tvChannelsRail = LinearLayout(requireContext()).apply {
@@ -475,6 +501,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
+            // Prevent rail from stealing focus
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
         scrollView.addView(tvChannelsRail)
