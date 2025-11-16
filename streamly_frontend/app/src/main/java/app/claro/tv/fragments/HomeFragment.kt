@@ -938,8 +938,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set spacing between hero carousel and "Seguí viendo" title to 5dp
-                topMargin = dpToPx(5)
+                // Set spacing between hero carousel and "Seguí viendo" title to 10dp (per requirement)
+                topMargin = dpToPx(10)
             }
             // Keep RTL-aware zero padding here; card start offset handled by inner scroll
             setPaddingRelative(0, 0, 0, 0)
@@ -954,8 +954,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set title-to-rail gap to 3dp
-                bottomMargin = dpToPx(3)
+                // Set title-to-rail gap to 10dp to maintain clearer separation
+                bottomMargin = dpToPx(10)
             }
             text = "Seguí viendo"
             textSize = 16f
@@ -1042,8 +1042,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set vertical spacing between rail rows to 5dp
-                topMargin = dpToPx(5)
+                // Set vertical spacing between rail rows to 10dp (per requirement)
+                topMargin = dpToPx(10)
             }
             setPaddingRelative(0, 0, 0, 0)
             clipToPadding = false
@@ -1057,8 +1057,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set title-to-rail gap to 3dp
-                bottomMargin = dpToPx(3)
+                // Set title-to-rail gap to 10dp for consistency
+                bottomMargin = dpToPx(10)
             }
             text = "Canales de TV"
             textSize = 16f
