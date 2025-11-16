@@ -823,6 +823,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
+                // Use start-aware margin to respect RTL
+                marginStart = dpToPx(44)
                 bottomMargin = dpToPx(16)
             }
             text = "Seguí viendo"
@@ -903,6 +905,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
+                // Use start-aware margin to respect RTL
+                marginStart = dpToPx(44)
                 bottomMargin = dpToPx(16)
             }
             text = "Canales de TV"
