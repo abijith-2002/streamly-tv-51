@@ -100,19 +100,40 @@ class HomeFragment : Fragment() {
     private var autoScrollPausedByUser: Boolean = false
     private var heroScrollAnimator: android.animation.ValueAnimator? = null
 
+    // When true, programmatic auto-advance must not alter focus in any way
+    private var suppressFocusForAutoScroll: Boolean = false
+
     private val heroAutoScrollRunnable = object : Runnable {
         override fun run() {
             // Do nothing if paused by user or view not ready
-            if (autoScrollPausedByUser || heroCards.isEmpty() || heroScrollView == null) {
+            val scrollView = heroScrollView
+            if (autoScrollPausedByUser || heroCards.isEmpty() || scrollView == null) {
                 // Check again later
                 heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
                 return
             }
-            // Advance index and loop
+
+            // Before auto-advancing, verify current global focus:
+            // Only auto-scroll visuals if the root currently has focus somewhere else (or anywhere),
+            // but never request or change focus as part of this tick.
+            val currentFocusedView = activity?.currentFocus
+            val heroHasGlobalFocus = scrollView.hasFocus() ||
+                heroCards.any { it.hasFocus() }
+
+            // Calculate next index but avoid any focus mutation
             val nextIndex = (heroCurrentIndex + 1) % heroCards.size
-            // Use the same routine to center and then shift focus, to keep behavior consistent
-            centerHeroAt(nextIndex, animate = true)
-            heroCards.getOrNull(nextIndex)?.requestFocus()
+
+            // Set suppression flag to ensure no requestFocus/clearFocus is triggered from centering or listeners
+            suppressFocusForAutoScroll = true
+            try {
+                // Center visually only. Do not call requestFocus().
+                // If hero itself has focus, we still center smoothly but do not alter focus target.
+                centerHeroAt(nextIndex, animate = true)
+            } finally {
+                suppressFocusForAutoScroll = false
+            }
+
+            // Re-post next auto-advance tick
             heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
         }
     }
@@ -219,6 +240,7 @@ class HomeFragment : Fragment() {
             isFocusableInTouchMode = true
             post { requestFocus() }
         }
+        // Start auto-scroll visuals only; focus will remain where it currently is
         startHeroAutoScroll()
     }
 
@@ -541,6 +563,7 @@ class HomeFragment : Fragment() {
                 ) {
                     pauseAutoScrollForUserInteraction()
                 }
+                // Never consume focus events if focus is outside hero; let them propagate
                 false
             }
         }
@@ -580,7 +603,14 @@ class HomeFragment : Fragment() {
                 // Ensure card keeps 0dp radius (already enforced in HeroCard) and re-center on focus
                 setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
-                        // On any focus gain (DPAD focus or selection change), align with same routine used by auto-scroll
+                        // If focus moved to this hero card by user DPAD, center it.
+                        // Guard against programmatic auto-advance from forcing focus/centering.
+                        if (suppressFocusForAutoScroll) return@setOnFocusChangeListener
+                        // Only act if current global focus is inside the hero container
+                        val scrollView = heroScrollView
+                        val focusInsideHero = scrollView?.hasFocus() == true || heroCards.any { it.hasFocus() }
+                        if (!focusInsideHero) return@setOnFocusChangeListener
+
                         val position = heroCards.indexOf(v as HeroCard).let { if (it >= 0) it else index }
                         pauseAutoScrollForUserInteraction()
                         // Guarantee centering after layout to avoid race conditions
@@ -592,6 +622,11 @@ class HomeFragment : Fragment() {
 
                 // Ensure re-centering when attached (e.g., after data update or layout pass)
                 addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                    if (suppressFocusForAutoScroll) return@addOnLayoutChangeListener
+                    val scrollView = heroScrollView
+                    val focusInsideHero = scrollView?.hasFocus() == true || heroCards.any { it.hasFocus() }
+                    if (!focusInsideHero) return@addOnLayoutChangeListener
+
                     val position = heroCards.indexOf(v as HeroCard)
                     if (position == heroCurrentIndex) {
                         centerHeroAt(position, animate = false)
@@ -615,7 +650,10 @@ class HomeFragment : Fragment() {
                                 val nextIndex = (currentIdx + delta + heroCards.size) % heroCards.size
                                 heroScrollView?.post {
                                     centerHeroAt(nextIndex, animate = true)
-                                    heroCards.getOrNull(nextIndex)?.requestFocus()
+                                    // Do not force focus reassignment here; DPAD will naturally keep focus on the moved card
+                                    if (!suppressFocusForAutoScroll) {
+                                        heroCards.getOrNull(nextIndex)?.requestFocus()
+                                    }
                                 }
                                 return@setOnKeyListener true
                             }
@@ -637,7 +675,7 @@ class HomeFragment : Fragment() {
         rail.clipChildren = false
         rail.clipToPadding = false
 
-        // Route DOWN from nav directly to the first hero card
+        // Route DOWN from nav directly to the first hero card (no change to maintain behavior)
         heroCards.firstOrNull()?.let { first ->
             topNavBarComposeView?.nextFocusDownId = first.id
         }
@@ -769,6 +807,7 @@ class HomeFragment : Fragment() {
                 val x = animator.animatedValue as Int
                 h.scrollTo(x, 0)
             }
+            // Never call requestFocus() here, and avoid any focus clears
             start()
         }
     }
