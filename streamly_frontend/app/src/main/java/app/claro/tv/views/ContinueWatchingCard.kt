@@ -56,6 +56,9 @@ class ContinueWatchingCard @JvmOverloads constructor(
     private val fillHeightPx by lazy { dpToPx(4) }
     private val cornerRadiusPx by lazy { dpToPx(4).toFloat() }
 
+    // Start inset for the inner indicator (2dp), RTL-aware via paddingStart on the track
+    private val fillStartInsetPx by lazy { dpToPx(2) }
+
     init {
         // Card setup - maintain width 206dp; height is image(116) + title(40) = 156dp.
         layoutParams = LinearLayout.LayoutParams(
@@ -125,6 +128,8 @@ class ContinueWatchingCard @JvmOverloads constructor(
             }
             // Track background - keep subtle transparent white track
             setBackgroundColor(Color.parseColor("#33FFFFFF"))
+            // Add RTL-aware 2dp start inset so inner fill starts 2dp from start edge
+            setPaddingRelative(fillStartInsetPx, 0, 0, 0)
             // Avoid parent clipping; focus scale should not cut progress visuals
             clipToPadding = false
             clipChildren = false
@@ -147,7 +152,7 @@ class ContinueWatchingCard @JvmOverloads constructor(
                 fillHeightPx,
                 Gravity.CENTER_VERTICAL or Gravity.START
             )
-            // Set RTL-aware; START gravity will flip automatically
+            // RTL-aware START; indicator will inset due to parent's paddingStart
             layoutDirection = LAYOUT_DIRECTION_LOCALE
             setBackgroundColor(Color.parseColor("#DE1717"))
             clipToPadding = false
@@ -234,12 +239,17 @@ class ContinueWatchingCard @JvmOverloads constructor(
     }
 
     private fun applyProgressToFill(progressFraction: Float) {
-        val trackWidthPxNow = progressTrack.width.takeIf { it > 0 } ?: progressTrack.layoutParams.width
-        val newWidth = (trackWidthPxNow * progressFraction).toInt().coerceIn(0, trackWidthPxNow)
+        // Effective usable width is track width minus the start inset (paddingStart), because the
+        // inner indicator should start 2dp inside the track's start edge.
+        val trackTotalWidth = progressTrack.width.takeIf { it > 0 } ?: progressTrack.layoutParams.width
+        val startInset = progressTrack.paddingStart
+        val usableWidth = (trackTotalWidth - startInset).coerceAtLeast(0)
+        val clamped = progressFraction.coerceIn(0f, 1f)
+        val newWidth = (usableWidth * clamped).toInt().coerceIn(0, usableWidth)
 
         val lp = progressFill.layoutParams as FrameLayout.LayoutParams
         lp.width = newWidth
-        // Gravity START/END awareness for RTL: use START so it flips automatically per locale
+        // Keep START gravity so it respects RTL and the 2dp start inset on the parent
         lp.gravity = Gravity.CENTER_VERTICAL or Gravity.START
         progressFill.layoutParams = lp
 
