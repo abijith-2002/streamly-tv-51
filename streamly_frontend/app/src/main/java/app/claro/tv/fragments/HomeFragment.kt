@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -35,6 +36,7 @@ import app.claro.tv.views.ContinueWatchingCard
 import app.claro.tv.views.TopNavBar
 import app.claro.tv.views.TvChannelCard
 import app.claro.tv.views.HeroCard
+import kotlin.math.abs
 
 /**
  * PUBLIC_INTERFACE
@@ -88,7 +90,12 @@ class HomeFragment : Fragment() {
     private val heroAutoScrollResumeIdleMs: Long = 4000L
     private val heroHandler = Handler(Looper.getMainLooper())
 
+    // Smooth scroll config for consistent easing/duration on TV
+    private val heroScrollDurationMs: Long = 240L
+    private val heroScrollInterpolator = AccelerateDecelerateInterpolator()
+
     private var autoScrollPausedByUser: Boolean = false
+    private var heroScrollAnimator: android.animation.ValueAnimator? = null
 
     private val heroAutoScrollRunnable = object : Runnable {
         override fun run() {
@@ -214,6 +221,9 @@ class HomeFragment : Fragment() {
     override fun onPause() {
         super.onPause()
         stopHeroAutoScroll()
+        // Cancel any in-flight animator to prevent leaks
+        heroScrollAnimator?.cancel()
+        heroScrollAnimator = null
     }
 
     /**
@@ -384,8 +394,8 @@ class HomeFragment : Fragment() {
             ).apply {
                 // 18dp from top of the screen; rootContainer has its own padding, so we only add top margin here
                 topMargin = dpToPx(18)
-                // Reduce bottom margin to tighten spacing to hero (24dp -> 12dp)
-                bottomMargin = dpToPx(12)
+                // Reduce bottom margin to tighten spacing to hero (24dp -> 12dp); we'll reduce more at hero container
+                bottomMargin = dpToPx(10) // reduced by ~2dp further to shrink nav-to-hero gap by ~6–8dp total
                 gravity = Gravity.CENTER_HORIZONTAL
             }
 
@@ -457,8 +467,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             ).apply {
-                // Reduce spacing between nav and hero (42dp -> 30dp)
-                topMargin = dpToPx(30)
+                // Reduce spacing between nav and hero further (previous 30dp). Decrease an extra ~6–8dp.
+                topMargin = dpToPx(24) // final reduction for a tighter nav-to-hero gap without clipping
                 // Root container has 88dp start/end padding; use negative margins to allow full width bleed
                 marginStart = -dpToPx(88)
                 marginEnd = -dpToPx(88)
@@ -476,7 +486,25 @@ class HomeFragment : Fragment() {
         heroBannerView = container
 
         // HorizontalScrollView: full width, dynamic side padding set after layout
-        val hsv = HorizontalScrollView(requireContext()).apply {
+        val hsv = object : HorizontalScrollView(requireContext()) {
+            // Disable over-scroll glow for TV polish
+            override fun overScrollBy(
+                deltaX: Int,
+                deltaY: Int,
+                scrollX: Int,
+                scrollY: Int,
+                scrollRangeX: Int,
+                scrollRangeY: Int,
+                maxOverScrollX: Int,
+                maxOverScrollY: Int,
+                isTouchEvent: Boolean
+            ): Boolean {
+                return super.overScrollBy(
+                    deltaX, deltaY, scrollX, scrollY,
+                    scrollRangeX, scrollRangeY, 0, 0, isTouchEvent
+                )
+            }
+        }.apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
@@ -486,6 +514,7 @@ class HomeFragment : Fragment() {
             clipToPadding = false
             clipChildren = false
             isHorizontalScrollBarEnabled = false
+            isSmoothScrollingEnabled = true
 
             // Route UP to nav from inside carousel
             if (topNavBarId != View.NO_ID) {
@@ -518,14 +547,14 @@ class HomeFragment : Fragment() {
         heroRail = rail
 
         // Create hero cards: exactly 872 x 222
-        heroTitles.forEachIndexed { idx, title ->
+        heroTitles.forEachIndexed { _, title ->
             val card = HeroCard(requireContext()).apply {
                 id = View.generateViewId()
                 layoutParams = LinearLayout.LayoutParams(
                     heroCardWidthPx,
                     heroCardHeightPx
                 ).apply {
-                    // spacing between cards (reduced) to retain 34dp peek visibility
+                    // spacing between cards to retain 34dp peek visibility
                     marginEnd = heroCardSpacingPx
                 }
                 // UP should go to top nav
@@ -645,10 +674,27 @@ class HomeFragment : Fragment() {
         // Clamp to non-negative; HSV will clamp max to content end automatically
         val targetScrollX = rawScrollX.coerceAtLeast(0)
 
-        if (animate) {
-            heroScrollView?.smoothScrollTo(targetScrollX, 0)
-        } else {
+        if (!animate) {
             heroScrollView?.scrollTo(targetScrollX, 0)
+            return
+        }
+
+        // Consistent smooth scroll using ValueAnimator for controlled duration and easing
+        val h = heroScrollView ?: return
+        heroScrollAnimator?.cancel()
+        val startX = h.scrollX
+        val endX = targetScrollX
+
+        if (startX == endX) return
+
+        heroScrollAnimator = android.animation.ValueAnimator.ofInt(startX, endX).apply {
+            duration = heroScrollDurationMs
+            interpolator = heroScrollInterpolator
+            addUpdateListener { animator ->
+                val x = animator.animatedValue as Int
+                h.scrollTo(x, 0)
+            }
+            start()
         }
     }
 
@@ -744,6 +790,7 @@ class HomeFragment : Fragment() {
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
+            isSmoothScrollingEnabled = true
         }
 
         continueWatchingRail = LinearLayout(requireContext()).apply {
@@ -822,6 +869,7 @@ class HomeFragment : Fragment() {
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
+            isSmoothScrollingEnabled = true
         }
 
         tvChannelsRail = LinearLayout(requireContext()).apply {

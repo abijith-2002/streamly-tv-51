@@ -16,12 +16,12 @@ import androidx.cardview.widget.CardView
  * Designed to fit within the fixed hero banner container (872dp x 222dp).
  *
  * Dimensions:
- * - Default width: 200dp
+ * - Width is provided by parent (872dp)
  * - Height: 222dp (matches hero banner height)
- * - Right margin: 12dp (sensible spacing between cards)
+ * - Right margin is set by parent rail
  *
  * Focus:
- * - Scales to 1.05x on focus
+ * - No scaling (keeps 0dp corner radius, prevents clipping)
  * - Focusable for TV DPAD navigation
  *
  * @param context Android context
@@ -36,14 +36,11 @@ class HeroCard @JvmOverloads constructor(
     private val titleText: TextView
 
     init {
-        // Card visual and layout config
+        // Card visual and layout config (parent sets exact size; maintain 0dp radius)
         layoutParams = LinearLayout.LayoutParams(
-            dpToPx(200),
+            ViewGroup.LayoutParams.WRAP_CONTENT,
             dpToPx(222)
-        ).apply {
-            // Keep in sync with rail spacing delta (+2dp)
-            marginEnd = dpToPx(14)
-        }
+        )
         radius = 0f
         cardElevation = dpToPx(4).toFloat()
         setCardBackgroundColor(Color.parseColor("#1a1a1a"))
@@ -77,7 +74,7 @@ class HeroCard @JvmOverloads constructor(
 
         addView(container)
 
-        // No scaling on focus to prevent any clipping or size change inside fixed hero banner
+        // Keep scale fixed (no scale animation) to avoid focus clipping within hero banner
         onFocusChangeListener = null
     }
 
