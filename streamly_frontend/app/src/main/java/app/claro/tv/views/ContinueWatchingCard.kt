@@ -126,8 +126,8 @@ class ContinueWatchingCard @JvmOverloads constructor(
                 // Keep a small bottom margin to separate from image bottom edge; preserve prior 6dp
                 bottomMargin = dpToPx(6)
             }
-            // Track background - keep subtle transparent white track
-            setBackgroundColor(Color.parseColor("#33FFFFFF"))
+            // Track background updated per requirement to #2C2C2C
+            setBackgroundColor(Color.parseColor("#2C2C2C"))
             // Add RTL-aware 2dp start inset so inner fill starts 2dp from start edge
             setPaddingRelative(fillStartInsetPx, 0, 0, 0)
             // Avoid parent clipping; focus scale should not cut progress visuals
