@@ -71,14 +71,11 @@ class HomeFragment : Fragment() {
     // Carousel sizing (dp)
     private val heroCardWidthDp: Int = 872
     private val heroCardHeightDp: Int = 222
-    // Viewport wider than a single card to show partial peeking on both sides
-    private val heroViewportWidthDp: Int = 1040 // 1040 - 872 = 168 => 84dp peek on each side
 
-    // Derived px values (computed in setupHeroBanner)
+    // Derived px values (computed in setupHeroBanner / after layout)
     private var heroCardWidthPx: Int = 0
     private var heroCardHeightPx: Int = 0
-    private var heroViewportWidthPx: Int = 0
-    private var heroCenterOffsetPx: Int = 0 // (viewport - card)/2
+    private var heroCenterOffsetPx: Int = 0 // dynamically computed: (viewportWidth - cardWidth)/2 after layout
 
     private var heroCurrentIndex: Int = 0
     private val heroAutoScrollIntervalMs: Long = 3000L
@@ -146,6 +143,9 @@ class HomeFragment : Fragment() {
             setBackgroundColor(Color.parseColor("#121212"))
             // Overscan-safe padding: 88dp left/right, 36dp top, 48dp bottom
             setPadding(dpToPx(88), dpToPx(36), dpToPx(88), dpToPx(48))
+            // Ensure hero full-bleed area isn't clipped by the root container
+            clipToPadding = false
+            clipChildren = false
             // Allow descendants to be focused
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
@@ -437,21 +437,27 @@ class HomeFragment : Fragment() {
      *   DOWN -> Content rails (first card in Continue Watching)
      */
     private fun setupHeroBanner() {
-        // Compute px values for viewport and card sizes
+        // Compute card px values
         heroCardWidthPx = dpToPx(heroCardWidthDp)
         heroCardHeightPx = dpToPx(heroCardHeightDp)
-        heroViewportWidthPx = dpToPx(heroViewportWidthDp)
-        heroCenterOffsetPx = (heroViewportWidthPx - heroCardWidthPx) / 2
+        heroCenterOffsetPx = 0 // will compute after layout from viewport width
 
+        // Root hero container: full-bleed width (compensate rootContainer side paddings)
         val container = FrameLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
-                heroViewportWidthPx,
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             ).apply {
                 topMargin = dpToPx(42)
+                // Root container has 88dp start/end padding; use negative margins to allow full width bleed
+                marginStart = -dpToPx(88)
+                marginEnd = -dpToPx(88)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
-            setBackgroundColor(Color.parseColor("#222222"))
+            // Disable clipping so peeking and any focus effects won't be cut
+            clipToPadding = false
+            clipChildren = false
+            setBackgroundColor(Color.TRANSPARENT)
             isFocusable = false
             isFocusableInTouchMode = false
             id = View.generateViewId()
@@ -459,16 +465,18 @@ class HomeFragment : Fragment() {
         heroBannerId = container.id
         heroBannerView = container
 
-        // HorizontalScrollView to hold hero cards with peeking
+        // HorizontalScrollView: full width, dynamic side padding set after layout
         val hsv = HorizontalScrollView(requireContext()).apply {
             layoutParams = FrameLayout.LayoutParams(
-                heroViewportWidthPx,
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             )
-            // Add start/end padding equal to center offset to allow centering first/last with peeks
-            setPadding(heroCenterOffsetPx, 0, heroCenterOffsetPx, 0)
+            // Padding set after layout based on measured width; do not clip peeks
+            setPadding(0, 0, 0, 0)
             clipToPadding = false
+            clipChildren = false
             isHorizontalScrollBarEnabled = false
+
             // Route UP to nav from inside carousel
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
@@ -482,7 +490,6 @@ class HomeFragment : Fragment() {
                 ) {
                     pauseAutoScrollForUserInteraction()
                 }
-                // Let focus system handle left/right navigation
                 false
             }
         }
@@ -495,17 +502,22 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            clipToPadding = false
+            clipChildren = false
         }
         heroRail = rail
 
         // Create hero cards: exactly 872 x 222
-        heroTitles.forEachIndexed { _, title ->
+        heroTitles.forEach { title ->
             val card = HeroCard(requireContext()).apply {
                 id = View.generateViewId()
                 layoutParams = LinearLayout.LayoutParams(
                     heroCardWidthPx,
                     heroCardHeightPx
-                )
+                ).apply {
+                    // spacing between cards to retain peek visibility
+                    marginEnd = dpToPx(12)
+                }
                 // UP should go to top nav
                 if (topNavBarId != View.NO_ID) {
                     nextFocusUpId = topNavBarId
@@ -525,7 +537,7 @@ class HomeFragment : Fragment() {
                     }
                 }
 
-                // Also pause auto-advance when user presses CENTER/ENTER on a hero card
+                // Pause auto-advance when user navigates/presses on a hero card
                 setOnKeyListener { _, keyCode, keyEvent ->
                     if (keyEvent.action == KeyEvent.ACTION_DOWN &&
                         (keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
@@ -553,8 +565,22 @@ class HomeFragment : Fragment() {
         // Add to root
         rootContainer.addView(container)
 
-        // Initially center the first card with peeking visible
-        centerHeroAt(heroCurrentIndex, animate = false)
+        // After layout, compute center offset from actual viewport width and set side padding
+        container.post {
+            val viewportWidth = heroScrollView?.width ?: 0
+            if (viewportWidth > 0) {
+                heroCenterOffsetPx = (viewportWidth - heroCardWidthPx) / 2
+                // Avoid negative padding in case of extreme sizes
+                val safeOffset = heroCenterOffsetPx.coerceAtLeast(0)
+                heroScrollView?.setPadding(safeOffset, 0, safeOffset, 0)
+                // Initially center the first card with peeking visible
+                centerHeroAt(heroCurrentIndex, animate = false)
+            }
+        }
+
+        // Ensure the parent root doesn't clip the full-bleed hero
+        rootContainer.clipToPadding = false
+        rootContainer.clipChildren = false
     }
 
     /**
@@ -567,7 +593,16 @@ class HomeFragment : Fragment() {
     private fun centerHeroAt(index: Int, animate: Boolean) {
         if (heroScrollView == null || heroCards.isEmpty()) return
         heroCurrentIndex = ((index % heroCards.size) + heroCards.size) % heroCards.size
-        val targetScrollX = heroCurrentIndex * heroCardWidthPx - heroCenterOffsetPx
+
+        // If offset not yet computed (before first layout), compute a best-effort from current width
+        if (heroCenterOffsetPx == 0) {
+            val viewportWidth = heroScrollView?.width ?: 0
+            if (viewportWidth > 0) {
+                heroCenterOffsetPx = (viewportWidth - heroCardWidthPx) / 2
+            }
+        }
+
+        val targetScrollX = (heroCurrentIndex * heroCardWidthPx - heroCenterOffsetPx).coerceAtLeast(0)
         if (animate) {
             heroScrollView?.smoothScrollTo(targetScrollX, 0)
         } else {
