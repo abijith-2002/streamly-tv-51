@@ -2,6 +2,8 @@ package app.claro.tv.fragments
 
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -55,9 +57,34 @@ class HomeFragment : Fragment() {
     private lateinit var tvChannelsLoadingView: View
     private var topNavBarComposeView: ComposeView? = null
     private var topNavBarId: Int = View.NO_ID
+
+    // Hero carousel container and items
     private var heroBannerView: View? = null
     private var heroBannerId: Int = View.NO_ID
-    private var heroCardView: HeroCard? = null
+    private var heroScrollView: HorizontalScrollView? = null
+    private var heroRail: LinearLayout? = null
+    private val heroCards: MutableList<HeroCard> = mutableListOf()
+    private val heroTitles: List<String> = listOf(
+        "Destacado 1", "Destacado 2", "Destacado 3"
+    )
+    private var heroCurrentIndex: Int = 0
+    private val heroAutoScrollIntervalMs: Long = 3000L
+    private val heroHandler = Handler(Looper.getMainLooper())
+    private val heroAutoScrollRunnable = object : Runnable {
+        override fun run() {
+            if (heroCards.isEmpty() || heroScrollView == null) {
+                heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
+                return
+            }
+            // Advance index and loop
+            heroCurrentIndex = (heroCurrentIndex + 1) % heroCards.size
+            val targetX = heroCurrentIndex * dpToPx(872)
+            heroScrollView?.smoothScrollTo(targetX, 0)
+            // Also request focus to keep a single focused card visible
+            heroCards.getOrNull(heroCurrentIndex)?.requestFocus()
+            heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
+        }
+    }
 
     // Focus gate: disable rails until user presses DPAD_DOWN
     private var railsFocusEnabled: Boolean = false
@@ -115,13 +142,11 @@ class HomeFragment : Fragment() {
         // Initially gate rails until the user explicitly presses DPAD_DOWN
         setRailsFocusable(false)
 
-        // After hero exists, route DOWN from nav directly to the hero card if available
-        heroCardView?.let { card ->
-            topNavBarComposeView?.nextFocusDownId = card.id
-        } ?: run {
-            if (heroBannerId != View.NO_ID) {
-                topNavBarComposeView?.nextFocusDownId = heroBannerId
-            }
+        // After hero exists, route DOWN from nav directly to the first hero card if available
+        if (heroCards.isNotEmpty()) {
+            topNavBarComposeView?.nextFocusDownId = heroCards.first().id
+        } else if (heroBannerId != View.NO_ID) {
+            topNavBarComposeView?.nextFocusDownId = heroBannerId
         }
 
         rootScrollView.addView(rootContainer)
@@ -159,6 +184,12 @@ class HomeFragment : Fragment() {
             isFocusableInTouchMode = true
             post { requestFocus() }
         }
+        startHeroAutoScroll()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopHeroAutoScroll()
     }
 
     /**
@@ -279,10 +310,10 @@ class HomeFragment : Fragment() {
             continueWatchingRail.addView(card)
         }
 
-        // Route DOWN from hero to the first continue watching card (if available)
+        // Route DOWN from every hero card to the first continue watching card (if available)
         if (firstCardId != View.NO_ID) {
             heroBannerView?.nextFocusDownId = firstCardId
-            heroCardView?.nextFocusDownId = firstCardId
+            heroCards.forEach { it.nextFocusDownId = firstCardId }
         }
     }
 
@@ -342,9 +373,9 @@ class HomeFragment : Fragment() {
             setOnKeyListener { _, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
                     setRailsFocusable(true)
-                    // Focus the single hero card if present; fallback to banner container
-                    if (heroCardView != null) {
-                        heroCardView?.requestFocus()
+                    // Focus the first hero card if present; fallback to banner container
+                    if (heroCards.isNotEmpty()) {
+                        heroCards.first().requestFocus()
                     } else {
                         heroBannerView?.requestFocus()
                     }
@@ -378,15 +409,17 @@ class HomeFragment : Fragment() {
     }
 
     /**
-     * Sets up the hero banner section with a single hero card (no carousel/pager).
-     * Position: 42dp gap below navigation
-     * Dimensions: Fixed 872dp x 222dp
-     * DPAD behavior:
-     * - UP returns to the navigation bar
-     * - DOWN moves to the first rail card when available
+     * Sets up the hero banner section as a horizontally scrollable carousel.
+     * - Fixed container size: 872dp x 222dp
+     * - Multiple hero cards: each exactly 872dp x 222dp
+     * - Auto-advances every 3 seconds, loops to start
+     * - D-pad:
+     *   LEFT/RIGHT -> navigate between cards (focusable children)
+     *   UP -> Top navigation bar
+     *   DOWN -> Content rails (first card in Continue Watching)
      */
     private fun setupHeroBanner() {
-        val heroBanner = FrameLayout(requireContext()).apply {
+        val container = FrameLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 dpToPx(872),
                 dpToPx(222)
@@ -394,44 +427,99 @@ class HomeFragment : Fragment() {
                 topMargin = dpToPx(42)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
-            // Keep neutral container background to frame the single card
             setBackgroundColor(Color.parseColor("#222222"))
-            // Container itself should not be a primary focus target
             isFocusable = false
             isFocusableInTouchMode = false
             id = View.generateViewId()
         }
-        heroBannerId = heroBanner.id
-        heroBannerView = heroBanner
+        heroBannerId = container.id
+        heroBannerView = container
 
-        // Single hero card sized exactly to banner container: 872dp x 222dp
-        val card = HeroCard(requireContext()).apply {
-            id = View.generateViewId()
-            // Override layout params to fill banner area exactly with no margins
+        // HorizontalScrollView to hold full-width hero cards
+        val hsv = HorizontalScrollView(requireContext()).apply {
             layoutParams = FrameLayout.LayoutParams(
                 dpToPx(872),
                 dpToPx(222)
             )
-            // Ensure UP goes to nav bar
+            isHorizontalScrollBarEnabled = false
+            // Route UP to nav from inside carousel
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
-            // Will set DOWN target once rails are populated
-            isFocusable = true
-            isFocusableInTouchMode = true
-            setTitle("Destacado")
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            isFillViewport = true // ensure one full card width is the viewport
         }
-        heroCardView = card
+        heroScrollView = hsv
 
-        heroBanner.addView(card)
+        val rail = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        }
+        heroRail = rail
 
-        // Route DOWN from nav directly to the hero card
-        topNavBarComposeView?.nextFocusDownId = card.id
+        // Create hero cards sized exactly to 872 x 222 with no scaling/clipping
+        heroTitles.forEachIndexed { index, title ->
+            val card = HeroCard(requireContext()).apply {
+                id = View.generateViewId()
+                layoutParams = LinearLayout.LayoutParams(
+                    dpToPx(872),
+                    dpToPx(222)
+                ).apply {
+                    // No end margin to avoid partial clipping; viewport shows exactly one card
+                    marginEnd = 0
+                }
+                // UP should go to top nav
+                if (topNavBarId != View.NO_ID) {
+                    nextFocusUpId = topNavBarId
+                }
+                isFocusable = true
+                isFocusableInTouchMode = true
+                setTitle(title)
 
-        // No scaling animation on banner container to prevent clipping
-        heroBanner.onFocusChangeListener = null
+                // When card gains focus (via DPAD), align scroll position to this card
+                setOnFocusChangeListener { v, hasFocus ->
+                    if (hasFocus) {
+                        val position = heroCards.indexOf(v as HeroCard)
+                        if (position >= 0) {
+                            heroCurrentIndex = position
+                            heroScrollView?.smoothScrollTo(position * dpToPx(872), 0)
+                        }
+                    }
+                }
+            }
+            heroCards.add(card)
+            rail.addView(card)
+        }
 
-        rootContainer.addView(heroBanner)
+        hsv.addView(rail)
+        container.addView(hsv)
+
+        // Route DOWN from nav directly to the first hero card
+        heroCards.firstOrNull()?.let { first ->
+            topNavBarComposeView?.nextFocusDownId = first.id
+        }
+
+        // Add to root
+        rootContainer.addView(container)
+    }
+
+    /**
+     * Starts hero auto-scroll (3s interval).
+     */
+    private fun startHeroAutoScroll() {
+        stopHeroAutoScroll()
+        heroHandler.postDelayed(heroAutoScrollRunnable, heroAutoScrollIntervalMs)
+    }
+
+    /**
+     * Stops hero auto-scroll.
+     */
+    private fun stopHeroAutoScroll() {
+        heroHandler.removeCallbacks(heroAutoScrollRunnable)
     }
 
     /**
