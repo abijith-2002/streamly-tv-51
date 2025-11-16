@@ -67,21 +67,39 @@ class HomeFragment : Fragment() {
     private val heroTitles: List<String> = listOf(
         "Destacado 1", "Destacado 2", "Destacado 3"
     )
+
+    // Carousel sizing (dp)
+    private val heroCardWidthDp: Int = 872
+    private val heroCardHeightDp: Int = 222
+    // Viewport wider than a single card to show partial peeking on both sides
+    private val heroViewportWidthDp: Int = 1040 // 1040 - 872 = 168 => 84dp peek on each side
+
+    // Derived px values (computed in setupHeroBanner)
+    private var heroCardWidthPx: Int = 0
+    private var heroCardHeightPx: Int = 0
+    private var heroViewportWidthPx: Int = 0
+    private var heroCenterOffsetPx: Int = 0 // (viewport - card)/2
+
     private var heroCurrentIndex: Int = 0
     private val heroAutoScrollIntervalMs: Long = 3000L
+    private val heroAutoScrollResumeIdleMs: Long = 4000L
     private val heroHandler = Handler(Looper.getMainLooper())
+
+    private var autoScrollPausedByUser: Boolean = false
+
     private val heroAutoScrollRunnable = object : Runnable {
         override fun run() {
-            if (heroCards.isEmpty() || heroScrollView == null) {
+            // Do nothing if paused by user or view not ready
+            if (autoScrollPausedByUser || heroCards.isEmpty() || heroScrollView == null) {
+                // Check again later
                 heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
                 return
             }
             // Advance index and loop
-            heroCurrentIndex = (heroCurrentIndex + 1) % heroCards.size
-            val targetX = heroCurrentIndex * dpToPx(872)
-            heroScrollView?.smoothScrollTo(targetX, 0)
-            // Also request focus to keep a single focused card visible
-            heroCards.getOrNull(heroCurrentIndex)?.requestFocus()
+            val nextIndex = (heroCurrentIndex + 1) % heroCards.size
+            centerHeroAt(nextIndex, animate = true)
+            // Request focus on the newly centered card
+            heroCards.getOrNull(nextIndex)?.requestFocus()
             heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
         }
     }
@@ -419,10 +437,16 @@ class HomeFragment : Fragment() {
      *   DOWN -> Content rails (first card in Continue Watching)
      */
     private fun setupHeroBanner() {
+        // Compute px values for viewport and card sizes
+        heroCardWidthPx = dpToPx(heroCardWidthDp)
+        heroCardHeightPx = dpToPx(heroCardHeightDp)
+        heroViewportWidthPx = dpToPx(heroViewportWidthDp)
+        heroCenterOffsetPx = (heroViewportWidthPx - heroCardWidthPx) / 2
+
         val container = FrameLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
-                dpToPx(872),
-                dpToPx(222)
+                heroViewportWidthPx,
+                heroCardHeightPx
             ).apply {
                 topMargin = dpToPx(42)
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -435,19 +459,32 @@ class HomeFragment : Fragment() {
         heroBannerId = container.id
         heroBannerView = container
 
-        // HorizontalScrollView to hold full-width hero cards
+        // HorizontalScrollView to hold hero cards with peeking
         val hsv = HorizontalScrollView(requireContext()).apply {
             layoutParams = FrameLayout.LayoutParams(
-                dpToPx(872),
-                dpToPx(222)
+                heroViewportWidthPx,
+                heroCardHeightPx
             )
+            // Add start/end padding equal to center offset to allow centering first/last with peeks
+            setPadding(heroCenterOffsetPx, 0, heroCenterOffsetPx, 0)
+            clipToPadding = false
             isHorizontalScrollBarEnabled = false
             // Route UP to nav from inside carousel
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-            isFillViewport = true // ensure one full card width is the viewport
+
+            // Pause auto-scroll when user is interacting with DPAD within the hero
+            setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN &&
+                    (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
+                ) {
+                    pauseAutoScrollForUserInteraction()
+                }
+                // Let focus system handle left/right navigation
+                false
+            }
         }
         heroScrollView = hsv
 
@@ -461,17 +498,14 @@ class HomeFragment : Fragment() {
         }
         heroRail = rail
 
-        // Create hero cards sized exactly to 872 x 222 with no scaling/clipping
-        heroTitles.forEachIndexed { index, title ->
+        // Create hero cards: exactly 872 x 222
+        heroTitles.forEachIndexed { _, title ->
             val card = HeroCard(requireContext()).apply {
                 id = View.generateViewId()
                 layoutParams = LinearLayout.LayoutParams(
-                    dpToPx(872),
-                    dpToPx(222)
-                ).apply {
-                    // No end margin to avoid partial clipping; viewport shows exactly one card
-                    marginEnd = 0
-                }
+                    heroCardWidthPx,
+                    heroCardHeightPx
+                )
                 // UP should go to top nav
                 if (topNavBarId != View.NO_ID) {
                     nextFocusUpId = topNavBarId
@@ -480,15 +514,28 @@ class HomeFragment : Fragment() {
                 isFocusableInTouchMode = true
                 setTitle(title)
 
-                // When card gains focus (via DPAD), align scroll position to this card
+                // When card gains focus (via DPAD), smoothly center this card with peeking
                 setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
                         val position = heroCards.indexOf(v as HeroCard)
                         if (position >= 0) {
-                            heroCurrentIndex = position
-                            heroScrollView?.smoothScrollTo(position * dpToPx(872), 0)
+                            pauseAutoScrollForUserInteraction()
+                            centerHeroAt(position, animate = true)
                         }
                     }
+                }
+
+                // Also pause auto-advance when user presses CENTER/ENTER on a hero card
+                setOnKeyListener { _, keyCode, keyEvent ->
+                    if (keyEvent.action == KeyEvent.ACTION_DOWN &&
+                        (keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                                keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                                keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                                keyCode == KeyEvent.KEYCODE_ENTER)
+                    ) {
+                        pauseAutoScrollForUserInteraction()
+                    }
+                    false
                 }
             }
             heroCards.add(card)
@@ -505,18 +552,58 @@ class HomeFragment : Fragment() {
 
         // Add to root
         rootContainer.addView(container)
+
+        // Initially center the first card with peeking visible
+        centerHeroAt(heroCurrentIndex, animate = false)
     }
 
     /**
-     * Starts hero auto-scroll (3s interval).
+     * Centers the hero carousel at the given index so that the card is centered in the viewport,
+     * leaving partial visibility (peeking) of adjacent cards.
+     *
+     * @param index Target card index
+     * @param animate Whether to animate the scroll
+     */
+    private fun centerHeroAt(index: Int, animate: Boolean) {
+        if (heroScrollView == null || heroCards.isEmpty()) return
+        heroCurrentIndex = ((index % heroCards.size) + heroCards.size) % heroCards.size
+        val targetScrollX = heroCurrentIndex * heroCardWidthPx - heroCenterOffsetPx
+        if (animate) {
+            heroScrollView?.smoothScrollTo(targetScrollX, 0)
+        } else {
+            heroScrollView?.scrollTo(targetScrollX, 0)
+        }
+    }
+
+    /**
+     * Pause auto-scroll because the user interacted (e.g., DPAD navigation).
+     * Auto-scroll will resume after a short idle.
+     */
+    private fun pauseAutoScrollForUserInteraction() {
+        autoScrollPausedByUser = true
+        stopHeroAutoScroll()
+        // Schedule resume after idle window
+        heroHandler.removeCallbacks(resumeAutoScrollRunnable)
+        heroHandler.postDelayed(resumeAutoScrollRunnable, heroAutoScrollResumeIdleMs)
+    }
+
+    private val resumeAutoScrollRunnable = Runnable {
+        autoScrollPausedByUser = false
+        startHeroAutoScroll()
+    }
+
+    /**
+     * Starts hero auto-scroll (3s interval) if not paused.
      */
     private fun startHeroAutoScroll() {
-        stopHeroAutoScroll()
-        heroHandler.postDelayed(heroAutoScrollRunnable, heroAutoScrollIntervalMs)
+        heroHandler.removeCallbacks(heroAutoScrollRunnable)
+        if (!autoScrollPausedByUser) {
+            heroHandler.postDelayed(heroAutoScrollRunnable, heroAutoScrollIntervalMs)
+        }
     }
 
     /**
-     * Stops hero auto-scroll.
+     * Stops hero auto-scroll immediately.
      */
     private fun stopHeroAutoScroll() {
         heroHandler.removeCallbacks(heroAutoScrollRunnable)
