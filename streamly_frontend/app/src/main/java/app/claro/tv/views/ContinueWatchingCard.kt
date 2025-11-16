@@ -2,9 +2,12 @@ package app.claro.tv.views
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Outline
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -24,9 +27,10 @@ import app.claro.tv.models.ContentItem
  * - Title text container height: 40dp
  * - Total height accommodates focus scale without clipping (container doesn't clip)
  *
- * Progress bar (Seguí viendo) per requirement:
- * - Track container (outer): width 218dp, height 9.2dp
- * - Progress indicator (inner): height 4.6dp, vertically centered in the 9.2dp track
+ * Progress bar (Seguí viendo) per updated requirement:
+ * - Track container (outer): width 189.5dp, height 8dp
+ * - Progress indicator (inner): height 4dp, vertically centered in the 8dp track
+ * - Corner radius: 4dp on both track and indicator
  * - Progress color: #DE1717
  * - RTL-aware layout and no clipping during focus scale
  *
@@ -45,6 +49,12 @@ class ContinueWatchingCard @JvmOverloads constructor(
     private val progressBar: ProgressBar
     private val titleText: TextView
     private var contentItem: ContentItem? = null
+
+    // Dimensions for progress components per requirement
+    private val trackWidthPx by lazy { dpToPxF(189.5f) }
+    private val trackHeightPx by lazy { dpToPx(8) }
+    private val fillHeightPx by lazy { dpToPx(4) }
+    private val cornerRadiusPx by lazy { dpToPx(4).toFloat() }
 
     init {
         // Card setup - maintain width 206dp; height is image(116) + title(40) = 156dp.
@@ -89,14 +99,22 @@ class ContinueWatchingCard @JvmOverloads constructor(
             clipChildren = false
         }
 
-        // Build custom progress track and fill to meet exact dimensions and color.
-        // Track: 218dp x 9.2dp, positioned bottom and centered horizontally in the image.
-        // Fill: height 4.6dp, vertically centered within the 9.2dp track. Width will be set in bind().
-        val trackWidthPx = dpToPxF(218f)
-        val trackHeightPx = dpToPxF(9.2f)
-        val fillHeightPx = dpToPxF(4.6f)
+        // Build custom progress track and fill to meet updated exact dimensions and color.
+        // Track: 189.5dp x 8dp, positioned bottom and centered horizontally in the image.
+        // Fill: height 4dp, vertically centered within the 8dp track. Width will be set in bind().
 
-        progressTrack = FrameLayout(context).apply {
+        progressTrack = object : FrameLayout(context) {
+            // Use rounded outline with 4dp radius and clip children to this rounded outline
+            override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+                super.onSizeChanged(w, h, oldw, oldh)
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(0, 0, w, h, cornerRadiusPx)
+                    }
+                }
+                clipToOutline = true
+            }
+        }.apply {
             layoutParams = FrameLayout.LayoutParams(
                 trackWidthPx,
                 trackHeightPx
@@ -105,21 +123,31 @@ class ContinueWatchingCard @JvmOverloads constructor(
                 // Keep a small bottom margin to separate from image bottom edge; preserve prior 6dp
                 bottomMargin = dpToPx(6)
             }
-            // Semi-transparent background to simulate a track (white at 20% like design guide)
+            // Track background - keep subtle transparent white track
             setBackgroundColor(Color.parseColor("#33FFFFFF"))
-            // Avoid clipping; focus scale should not cut progress visuals
+            // Avoid parent clipping; focus scale should not cut progress visuals
             clipToPadding = false
             clipChildren = false
         }
 
         // Inner progress indicator (fill) - red color, centered vertically within the track
-        progressFill = FrameLayout(context).apply {
+        progressFill = object : FrameLayout(context) {
+            override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+                super.onSizeChanged(w, h, oldw, oldh)
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(0, 0, w, h, cornerRadiusPx)
+                    }
+                }
+                clipToOutline = true
+            }
+        }.apply {
             layoutParams = FrameLayout.LayoutParams(
                 0, // width is set during bind() based on progress
                 fillHeightPx,
                 Gravity.CENTER_VERTICAL or Gravity.START
             )
-            // Set RTL-aware; for RTL, we will adjust via layoutDirection and gravity handling
+            // Set RTL-aware; START gravity will flip automatically
             layoutDirection = LAYOUT_DIRECTION_LOCALE
             setBackgroundColor(Color.parseColor("#DE1717"))
             clipToPadding = false
@@ -127,8 +155,7 @@ class ContinueWatchingCard @JvmOverloads constructor(
         }
         progressTrack.addView(progressFill)
 
-        // Keep a tiny transparent ProgressBar only to reuse system animation/state
-        // but visually hidden; we will drive our custom fill via its progress.
+        // Hidden ProgressBar (state holder)
         progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
             layoutParams = FrameLayout.LayoutParams(1, 1) // effectively hidden
             max = 100
@@ -207,9 +234,8 @@ class ContinueWatchingCard @JvmOverloads constructor(
     }
 
     private fun applyProgressToFill(progressFraction: Float) {
-        val trackWidthPx = progressTrack.width.takeIf { it > 0 } ?: progressTrack.layoutParams.width
-        val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
-        val newWidth = (trackWidthPx * progressFraction).toInt().coerceIn(0, trackWidthPx)
+        val trackWidthPxNow = progressTrack.width.takeIf { it > 0 } ?: progressTrack.layoutParams.width
+        val newWidth = (trackWidthPxNow * progressFraction).toInt().coerceIn(0, trackWidthPxNow)
 
         val lp = progressFill.layoutParams as FrameLayout.LayoutParams
         lp.width = newWidth
@@ -230,7 +256,7 @@ class ContinueWatchingCard @JvmOverloads constructor(
         return (dp * context.resources.displayMetrics.density).toInt()
     }
 
-    // Fractional dp support, e.g., 9.2dp and 4.6dp
+    // Fractional dp support, e.g., 189.5dp
     private fun dpToPxF(dp: Float): Int {
         return (dp * context.resources.displayMetrics.density).toInt()
     }
