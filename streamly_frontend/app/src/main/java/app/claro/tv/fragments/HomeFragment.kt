@@ -36,7 +36,6 @@ import app.claro.tv.views.ContinueWatchingCard
 import app.claro.tv.views.TopNavBar
 import app.claro.tv.views.TvChannelCard
 import app.claro.tv.views.HeroCard
-import kotlin.math.abs
 
 /**
  * PUBLIC_INTERFACE
@@ -107,8 +106,8 @@ class HomeFragment : Fragment() {
             }
             // Advance index and loop
             val nextIndex = (heroCurrentIndex + 1) % heroCards.size
+            // Use the same routine to center and then shift focus, to keep behavior consistent
             centerHeroAt(nextIndex, animate = true)
-            // Request focus on the newly centered card
             heroCards.getOrNull(nextIndex)?.requestFocus()
             heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
         }
@@ -547,7 +546,7 @@ class HomeFragment : Fragment() {
         heroRail = rail
 
         // Create hero cards: exactly 872 x 222
-        heroTitles.forEachIndexed { _, title ->
+        heroTitles.forEachIndexed { index, title ->
             val card = HeroCard(requireContext()).apply {
                 id = View.generateViewId()
                 layoutParams = LinearLayout.LayoutParams(
@@ -565,14 +564,20 @@ class HomeFragment : Fragment() {
                 isFocusableInTouchMode = true
                 setTitle(title)
 
-                // When card gains focus (via DPAD), smoothly center this card with exact 34dp peeks on sides
+                // Ensure card keeps 0dp radius (already enforced in HeroCard) and re-center on focus
                 setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
-                        val position = heroCards.indexOf(v as HeroCard)
-                        if (position >= 0) {
-                            pauseAutoScrollForUserInteraction()
-                            centerHeroAt(position, animate = true)
-                        }
+                        val position = heroCards.indexOf(v as HeroCard).let { if (it >= 0) it else index }
+                        pauseAutoScrollForUserInteraction()
+                        centerHeroAt(position, animate = true)
+                    }
+                }
+
+                // Ensure re-centering when attached (e.g., after data update or layout pass)
+                addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                    val position = heroCards.indexOf(v as HeroCard)
+                    if (position == heroCurrentIndex) {
+                        centerHeroAt(position, animate = false)
                     }
                 }
 
@@ -618,6 +623,8 @@ class HomeFragment : Fragment() {
                 val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
                 heroSidePaddingPx = rawSide.coerceAtLeast(0)
                 heroScrollView?.setPadding(heroSidePaddingPx, 0, heroSidePaddingPx, 0)
+                heroScrollView?.clipToPadding = false
+                heroScrollView?.clipChildren = false
                 // Always keep current card centered after layout changes
                 centerHeroAt(heroCurrentIndex, animate = false)
             }
@@ -657,34 +664,33 @@ class HomeFragment : Fragment() {
         if (heroScrollView == null || heroCards.isEmpty()) return
         heroCurrentIndex = ((index % heroCards.size) + heroCards.size) % heroCards.size
 
-        val viewportWidth = heroScrollView?.width ?: 0
+        val h = heroScrollView ?: return
+        val viewportWidth = h.width
         if (viewportWidth <= 0) return
 
-        // side padding may not be computed yet (pre-layout); compute default honoring 34dp peek
-        if (heroSidePaddingPx == 0) {
+        // Ensure side padding honors 34dp peeks on both sides
+        if (heroSidePaddingPx <= 0) {
             val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
             heroSidePaddingPx = rawSide.coerceAtLeast(0)
+            h.setPadding(heroSidePaddingPx, 0, heroSidePaddingPx, 0)
+            h.clipToPadding = false
+            h.clipChildren = false
         }
 
-        // targetCenterX = sidePadding + i*(card+spacing) + card/2
+        // Compute target scroll X so that target card center aligns with viewport center
         val unitWidth = heroCardWidthPx + heroCardSpacingPx
         val targetCenterX = heroSidePaddingPx + heroCurrentIndex * unitWidth + (heroCardWidthPx / 2f)
-        val rawScrollX = (targetCenterX - (viewportWidth / 2f)).toInt()
-
-        // Clamp to non-negative; HSV will clamp max to content end automatically
-        val targetScrollX = rawScrollX.coerceAtLeast(0)
+        val desiredScrollX = (targetCenterX - (viewportWidth / 2f)).toInt().coerceAtLeast(0)
 
         if (!animate) {
-            heroScrollView?.scrollTo(targetScrollX, 0)
+            h.scrollTo(desiredScrollX, 0)
             return
         }
 
-        // Consistent smooth scroll using ValueAnimator for controlled duration and easing
-        val h = heroScrollView ?: return
+        // Smooth scroll with ValueAnimator for deterministic duration/easing
         heroScrollAnimator?.cancel()
         val startX = h.scrollX
-        val endX = targetScrollX
-
+        val endX = desiredScrollX
         if (startX == endX) return
 
         heroScrollAnimator = android.animation.ValueAnimator.ofInt(startX, endX).apply {
