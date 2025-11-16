@@ -54,6 +54,10 @@ class HomeFragment : Fragment() {
     private lateinit var rootContainer: LinearLayout
     private lateinit var continueWatchingRail: LinearLayout
     private lateinit var tvChannelsRail: LinearLayout
+
+    // Keep references to the first focusable child in each rail for precise focus routing
+    private var continueWatchingFirstCardId: Int = View.NO_ID
+    private var tvChannelsFirstCardId: Int = View.NO_ID
     private lateinit var continueWatchingLoadingView: View
     private lateinit var tvChannelsLoadingView: View
     private var topNavBarComposeView: ComposeView? = null
@@ -378,6 +382,9 @@ class HomeFragment : Fragment() {
             continueWatchingRail.addView(card)
         }
 
+        // Persist first card id for cross-rail focus routing
+        continueWatchingFirstCardId = firstCardId
+
         // Route DOWN from every hero card to the first continue watching card (if available)
         if (firstCardId != View.NO_ID) {
             heroBannerView?.nextFocusDownId = firstCardId
@@ -391,22 +398,30 @@ class HomeFragment : Fragment() {
     private fun updateTvChannelsRail(channels: List<TvChannel>) {
         tvChannelsRail.removeAllViews()
 
+        var firstCardLocalId: Int = View.NO_ID
+
         channels.forEachIndexed { index, channel ->
             val card = TvChannelCard(requireContext()).apply {
                 // Give each card a stable view id for focus routing
                 id = View.generateViewId()
-                // Ensure upward focus moves to TopNavBar
-                if (topNavBarId != View.NO_ID) {
-                    nextFocusUpId = topNavBarId
-                }
+                // Ensure upward focus moves to the first rail (Continue Watching) as requested
+                val upId = if (continueWatchingFirstCardId != View.NO_ID) continueWatchingFirstCardId else continueWatchingRail.id
+                nextFocusUpId = upId
+
                 // Respect current rails focus gate
                 isFocusable = railsFocusEnabled
                 isFocusableInTouchMode = railsFocusEnabled
                 descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
             }
+            if (index == 0) {
+                firstCardLocalId = card.id
+            }
             card.bind(channel)
             tvChannelsRail.addView(card)
         }
+
+        // Persist first card id for TV channels rail (not directly used for this fix but kept for symmetry)
+        tvChannelsFirstCardId = firstCardLocalId
     }
 
     /**
@@ -921,6 +936,16 @@ class HomeFragment : Fragment() {
                 nextFocusUpId = topNavBarId
             }
             isSmoothScrollingEnabled = true
+
+            // Intercept DPAD_UP within the first rail: let default View system handle going to TopNavBar.
+            // No special handling here; keep behavior unchanged.
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
+                    // Do not consume; system will use nextFocusUpId from child cards (TopNavBar)
+                    return@setOnKeyListener false
+                }
+                false
+            }
         }
 
         continueWatchingRail = LinearLayout(requireContext()).apply {
@@ -1009,11 +1034,31 @@ class HomeFragment : Fragment() {
             isFocusableInTouchMode = false
             // First item offset 10dp from start; RTL-aware
             setPaddingRelative(dpToPx(10), 0, 0, 0)
-            // Route UP into the TopNavBar if user navigates upwards from within the rail
+            // Route UP into the TopNavBar if user navigates upwards from within the rail (fallback)
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
             isSmoothScrollingEnabled = true
+
+            // Intercept DPAD_UP when focus is within the second rail; move to first rail's first focusable child
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
+                    // Prefer explicit routing to the first card in Continue Watching if available
+                    val targetId = if (continueWatchingFirstCardId != View.NO_ID) {
+                        continueWatchingFirstCardId
+                    } else {
+                        // Fallback to container itself (system will find a child)
+                        continueWatchingRail.id
+                    }
+                    // Request focus on target
+                    val target = view?.findViewById<View>(targetId)
+                    if (target != null) {
+                        target.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                }
+                false
+            }
         }
 
         tvChannelsRail = LinearLayout(requireContext()).apply {
