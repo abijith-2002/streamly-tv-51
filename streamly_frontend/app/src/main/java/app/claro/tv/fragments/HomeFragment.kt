@@ -57,6 +57,7 @@ class HomeFragment : Fragment() {
     private lateinit var continueWatchingLoadingView: View
     private lateinit var tvChannelsLoadingView: View
     private var topNavBarComposeView: ComposeView? = null
+    private var topNavBarId: Int = View.NO_ID
     
     private lateinit var viewModel: HomeViewModel
     private lateinit var repository: ContentRepository
@@ -122,7 +123,7 @@ class HomeFragment : Fragment() {
                 // Make the ComposeView focusable and request focus
                 // This will trigger the LaunchedEffect in TopNavBar to focus the search icon
                 composeView.isFocusable = true
-                composeView.isFocusableInTouchMode = false
+                composeView.isFocusableInTouchMode = true
                 composeView.requestFocus()
             }
         }
@@ -234,6 +235,10 @@ class HomeFragment : Fragment() {
         
         items.forEach { item ->
             val card = ContinueWatchingCard(requireContext())
+            // Ensure upward focus moves to TopNavBar
+            if (topNavBarId != View.NO_ID) {
+                card.nextFocusUpId = topNavBarId
+            }
             card.bind(item)
             
             // Load image with Coil if URL is available
@@ -257,6 +262,10 @@ class HomeFragment : Fragment() {
         
         channels.forEach { channel ->
             val card = TvChannelCard(requireContext())
+            // Ensure upward focus moves to TopNavBar
+            if (topNavBarId != View.NO_ID) {
+                card.nextFocusUpId = topNavBarId
+            }
             card.bind(channel)
             
             // Load image with Coil if URL is available
@@ -296,8 +305,9 @@ class HomeFragment : Fragment() {
             }
             
             // Make ComposeView focusable so it can receive and delegate focus to Compose elements
+            id = View.generateViewId()
             isFocusable = true
-            isFocusableInTouchMode = false
+            isFocusableInTouchMode = true
             
             setContent {
                 // Use Material3 adapter to ensure typography tokens are available
@@ -319,6 +329,7 @@ class HomeFragment : Fragment() {
         
         // Store reference for focus management
         topNavBarComposeView = composeView
+        topNavBarId = composeView.id
         rootContainer.addView(composeView)
     }
 
@@ -351,6 +362,11 @@ class HomeFragment : Fragment() {
             text = "Featured Content"
             textSize = 48f
             setTextColor(Color.parseColor("#808080"))
+        }
+
+        // Ensure DPAD_UP from hero goes back to nav bar if available
+        if (topNavBarId != View.NO_ID) {
+            heroBanner.nextFocusUpId = topNavBarId
         }
 
         // Focus effect for hero banner

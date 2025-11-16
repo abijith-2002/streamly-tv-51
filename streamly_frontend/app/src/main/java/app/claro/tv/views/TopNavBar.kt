@@ -36,6 +36,10 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.focus.focusProperties
+import kotlinx.coroutines.delay
 
 /**
  * PUBLIC_INTERFACE
@@ -72,6 +76,8 @@ fun TopNavBar(
     LaunchedEffect(requestInitialFocus) {
         if (requestInitialFocus) {
             try {
+                // Small delay to ensure focus node is attached before requesting focus
+                delay(60)
                 searchFocusRequester.requestFocus()
             } catch (e: IllegalStateException) {
                 // Ignore if focus requester is not yet attached
@@ -91,7 +97,8 @@ fun TopNavBar(
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 12.dp)
+                .focusGroup(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -155,6 +162,8 @@ private fun FocusablePill(
     }
     
     focusableModifier = focusableModifier
+        .focusTarget()
+        .focusProperties { canFocus = true }
         .focusable(interactionSource = interactionSource)
         .onFocusChanged { state -> focused = state.hasFocus }
         .onKeyEvent { keyEvent ->
