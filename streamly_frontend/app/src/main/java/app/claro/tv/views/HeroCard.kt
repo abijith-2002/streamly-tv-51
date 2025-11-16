@@ -41,7 +41,8 @@ class HeroCard @JvmOverloads constructor(
             dpToPx(200),
             dpToPx(222)
         ).apply {
-            marginEnd = dpToPx(12)
+            // Keep in sync with rail spacing delta (+2dp)
+            marginEnd = dpToPx(14)
         }
         radius = 0f
         cardElevation = dpToPx(4).toFloat()

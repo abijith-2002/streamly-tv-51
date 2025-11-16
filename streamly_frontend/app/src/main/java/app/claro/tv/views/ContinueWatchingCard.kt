@@ -37,8 +37,8 @@ class ContinueWatchingCard @JvmOverloads constructor(
             dpToPx(412),
             dpToPx(312)
         ).apply {
-            // Slightly reduced spacing between cards (from 10dp to 8dp)
-            marginEnd = dpToPx(8)
+            // Slightly increased spacing between cards for better separation
+            marginEnd = dpToPx(10)
         }
         radius = 0f
         cardElevation = dpToPx(4).toFloat()

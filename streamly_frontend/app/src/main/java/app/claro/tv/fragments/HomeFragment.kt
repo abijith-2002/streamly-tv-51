@@ -71,8 +71,8 @@ class HomeFragment : Fragment() {
     // Carousel sizing (dp)
     private val heroCardWidthDp: Int = 872
     private val heroCardHeightDp: Int = 222
-    // Reduce spacing between cards to ~10dp for tighter layout
-    private val heroCardSpacingDp: Int = 10
+    // Slightly increase spacing between cards to subtly separate hero items
+    private val heroCardSpacingDp: Int = 12
     // Enforce 34dp peek for previous/next cards
     private val heroPeekDp: Int = 34
 
