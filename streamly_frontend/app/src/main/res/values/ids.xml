@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <item name="tag_request_search_focus" type="id"/>
+    <item name="tag_request_last_nav_focus" type="id"/>
+    <item name="tag_request_focus_hero" type="id"/>
 </resources>

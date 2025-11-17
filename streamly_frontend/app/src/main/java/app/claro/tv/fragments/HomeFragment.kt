@@ -65,7 +65,6 @@ class HomeFragment : Fragment() {
     private var topNavBarId: Int = View.NO_ID
 
     // Dynamic vertical spacing to ensure top edge-to-nav equals nav-to-hero.
-    // We compute navToHeroGapPx from actual positions and then apply the same value as top padding above the nav.
     private var navToHeroGapPx: Int = 0
 
     // Hero carousel container and items
@@ -81,64 +80,43 @@ class HomeFragment : Fragment() {
     // Carousel sizing (dp)
     private val heroCardWidthDp: Int = 872
     private val heroCardHeightDp: Int = 222
-    // Slightly increase spacing between cards to subtly separate hero items
     private val heroCardSpacingDp: Int = 12
-    // Enforce 34dp peek for previous/next cards
     private val heroPeekDp: Int = 34
 
-    // Derived px values (computed in setupHeroBanner / after layout)
+    // Derived px values
     private var heroCardWidthPx: Int = 0
     private var heroCardHeightPx: Int = 0
     private var heroCardSpacingPx: Int = 0
     private var heroPeekPx: Int = 0
-    private var heroSidePaddingPx: Int = 0 // dynamic symmetric content padding to allow equal peeking
+    private var heroSidePaddingPx: Int = 0
 
     private var heroCurrentIndex: Int = 0
     private val heroAutoScrollIntervalMs: Long = 3000L
     private val heroAutoScrollResumeIdleMs: Long = 4000L
     private val heroHandler = Handler(Looper.getMainLooper())
 
-    // Smooth scroll config for consistent easing/duration on TV
     private val heroScrollDurationMs: Long = 240L
     private val heroScrollInterpolator = AccelerateDecelerateInterpolator()
 
     private var autoScrollPausedByUser: Boolean = false
     private var heroScrollAnimator: android.animation.ValueAnimator? = null
-
-    // When true, programmatic auto-advance must not alter focus in any way
     private var suppressFocusForAutoScroll: Boolean = false
 
     private val heroAutoScrollRunnable = object : Runnable {
         override fun run() {
-            // Do nothing if paused by user or view not ready
             val scrollView = heroScrollView
             if (autoScrollPausedByUser || heroCards.isEmpty() || scrollView == null) {
-                // Check again later
                 heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
                 return
             }
 
-            // Before auto-advancing, verify current global focus:
-            // Only auto-scroll visuals if the root currently has focus somewhere else (or anywhere),
-            // but never request or change focus as part of this tick.
-            val currentFocusedView = activity?.currentFocus
-            val heroHasGlobalFocus = scrollView.hasFocus() ||
-                heroCards.any { it.hasFocus() }
-
-            // Calculate next index but avoid any focus mutation
             val nextIndex = (heroCurrentIndex + 1) % heroCards.size
-
-            // Set suppression flag to ensure no requestFocus/clearFocus is triggered from centering or listeners
             suppressFocusForAutoScroll = true
             try {
-                // Center visually only. Do not call requestFocus().
-                // If hero itself has focus, we still center smoothly but do not alter focus target.
                 centerHeroAt(nextIndex, animate = true)
             } finally {
                 suppressFocusForAutoScroll = false
             }
-
-            // Re-post next auto-advance tick
             heroHandler.postDelayed(this, heroAutoScrollIntervalMs)
         }
     }
@@ -152,7 +130,7 @@ class HomeFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize repository - force fake data to disable all API/network calls
+        // Initialize repository - using fake data by default here
         repository = FakeContentRepository()
 
         // Create ViewModel
@@ -165,14 +143,13 @@ class HomeFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Root scroll view for vertical scrolling if content exceeds screen height
+        // Root scroll view for vertical scrolling
         rootScrollView = ScrollView(requireContext()).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             isVerticalScrollBarEnabled = false
-            // Prevent scroll view from intercepting D-pad events initially
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
@@ -183,27 +160,23 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             setBackgroundColor(Color.parseColor("#121212"))
-            // Overscan-safe padding: 88dp left/right, minimal top initially (we will compute symmetric spacing),
-            // and 48dp bottom. Start with overscan-safe minimum top of 36dp to avoid clipping while measuring.
             setPadding(dpToPx(88), dpToPx(36), dpToPx(88), dpToPx(48))
-            // Ensure hero full-bleed area isn't clipped by the root container
             clipToPadding = false
             clipChildren = false
-            // Allow descendants to be focused
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
-        // Compose Top Navigation - horizontally centered, 18dp from top
+        // Compose Top Navigation
         addComposeTopNavBar()
 
         setupHeroBanner()
         setupContinueWatchingSection()
         setupTvChannelsSection()
 
-        // Initially gate rails until the user explicitly presses DPAD_DOWN
+        // Initially gate rails until explicit DPAD_DOWN from nav
         setRailsFocusable(false)
 
-        // After hero exists, route DOWN from nav directly to the first hero card if available
+        // After hero exists, route DOWN from nav directly to first hero card if possible
         if (heroCards.isNotEmpty()) {
             topNavBarComposeView?.nextFocusDownId = heroCards.first().id
         } else if (heroBannerId != View.NO_ID) {
@@ -217,21 +190,17 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Request initial focus on the ComposeView containing TopNavBar
-        // The TopNavBar Composable will internally request focus on the search icon
+        // Request initial focus on Search icon in nav bar
         view.post {
             topNavBarComposeView?.let { composeView ->
-                // Make the ComposeView focusable so internal FocusRequester can work
                 composeView.isFocusable = true
                 composeView.isFocusableInTouchMode = true
-                // Ask the Composable to move focus to the Search icon via the exposed tag runnable
                 (composeView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
-                // As a fallback, request focus on the ComposeView; TopNavBar will shift it to the search icon
                 composeView.requestFocus()
             }
         }
 
-        // Add a global DPAD_RIGHT fallback to jump to search from any initial region
+        // Global DPAD_RIGHT fallback to jump to search (from initial/home content area)
         view.rootView?.setOnKeyListener { _, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
                 topNavBarComposeView?.let { navView ->
@@ -242,7 +211,6 @@ class HomeFragment : Fragment() {
             false
         }
 
-        // Observe ViewModel state changes
         observeViewModelStates()
 
         // Load initial data
@@ -252,20 +220,17 @@ class HomeFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Ensure nav regains focus when returning to the screen
         topNavBarComposeView?.apply {
             isFocusable = true
             isFocusableInTouchMode = true
             post { requestFocus() }
         }
-        // Start auto-scroll visuals only; focus will remain where it currently is
         startHeroAutoScroll()
     }
 
     override fun onPause() {
         super.onPause()
         stopHeroAutoScroll()
-        // Cancel any in-flight animator to prevent leaks
         heroScrollAnimator?.cancel()
         heroScrollAnimator = null
     }
@@ -274,7 +239,6 @@ class HomeFragment : Fragment() {
      * Observes ViewModel LiveData and updates UI accordingly.
      */
     private fun observeViewModelStates() {
-        // Observe Continue Watching state
         viewModel.continueWatchingState.observe(viewLifecycleOwner) { state ->
             when (state) {
                 is UiState.Loading -> {
@@ -291,7 +255,6 @@ class HomeFragment : Fragment() {
             }
         }
 
-        // Observe TV Channels state
         viewModel.tvChannelsState.observe(viewLifecycleOwner) { state ->
             when (state) {
                 is UiState.Loading -> {
@@ -309,41 +272,26 @@ class HomeFragment : Fragment() {
         }
     }
 
-    /**
-     * Shows loading indicator for Continue Watching section.
-     */
     private fun showContinueWatchingLoading() {
         continueWatchingLoadingView.visibility = View.VISIBLE
         continueWatchingRail.visibility = View.GONE
     }
 
-    /**
-     * Hides loading indicator for Continue Watching section.
-     */
     private fun hideContinueWatchingLoading() {
         continueWatchingLoadingView.visibility = View.GONE
         continueWatchingRail.visibility = View.VISIBLE
     }
 
-    /**
-     * Shows loading indicator for TV Channels section.
-     */
     private fun showTvChannelsLoading() {
         tvChannelsLoadingView.visibility = View.VISIBLE
         tvChannelsRail.visibility = View.GONE
     }
 
-    /**
-     * Hides loading indicator for TV Channels section.
-     */
     private fun hideTvChannelsLoading() {
         tvChannelsLoadingView.visibility = View.GONE
         tvChannelsRail.visibility = View.VISIBLE
     }
 
-    /**
-     * Shows error message with retry option.
-     */
     private fun showErrorWithRetry(message: String, isForContinueWatching: Boolean) {
         Toast.makeText(
             requireContext(),
@@ -351,7 +299,6 @@ class HomeFragment : Fragment() {
             Toast.LENGTH_LONG
         ).show()
 
-        // Auto-retry after showing error
         view?.postDelayed({
             if (isForContinueWatching) {
                 viewModel.retryContinueWatching()
@@ -361,9 +308,6 @@ class HomeFragment : Fragment() {
         }, 3000)
     }
 
-    /**
-     * Updates Continue Watching rail with fetched data.
-     */
     private fun updateContinueWatchingRail(items: List<ContentItem>) {
         continueWatchingRail.removeAllViews()
 
@@ -371,22 +315,15 @@ class HomeFragment : Fragment() {
 
         items.forEachIndexed { index, item ->
             val card = ContinueWatchingCard(requireContext()).apply {
-                // Give each card a stable view id for focus routing
                 id = View.generateViewId()
-                // Ensure upward focus moves to TopNavBar
                 if (topNavBarId != View.NO_ID) {
                     nextFocusUpId = topNavBarId
                 }
-                // Respect current rails focus gate
                 isFocusable = railsFocusEnabled
                 isFocusableInTouchMode = railsFocusEnabled
-                // Ensure no parent intercept; child takes focus
                 descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
-                // Add start margin only for first item if needed (kept at 0; container padding handles 10dp)
                 (layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-                    if (index == 0) {
-                        lp.marginStart = lp.marginStart // no-op; padding already applied
-                    }
+                    if (index == 0) lp.marginStart = lp.marginStart
                 }
             }
             if (index == 0) {
@@ -396,35 +333,44 @@ class HomeFragment : Fragment() {
             continueWatchingRail.addView(card)
         }
 
-        // Persist first card id for cross-rail focus routing
         continueWatchingFirstCardId = firstCardId
 
-        // Route DOWN from every hero card to the first continue watching card (if available)
         if (firstCardId != View.NO_ID) {
-            // Primary path: static nextFocusDownId wiring
             heroBannerView?.nextFocusDownId = firstCardId
             heroCards.forEach { it.nextFocusDownId = firstCardId }
 
-            // Fallback: add DPAD_DOWN key intercept at hero container level in case nextFocusDownId
-            // cannot be resolved at dispatch time (e.g., due to late population or layout timing).
-            // We only set this once when we have a valid first card id.
+            // Provide fallback DOWN handling from hero to this rail
             heroScrollView?.setOnKeyListener { _, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
                     val target = view?.findViewById<View>(continueWatchingFirstCardId)
                     if (target != null) {
-                        // Open rails focus gate and request focus on the first rail's first card
                         setRailsFocusable(true)
                         target.requestFocus()
                         true
                     } else {
                         false
                     }
+                } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
+                    // Move focus to nav bar on UP; prefer last-focused item
+                    val navView = topNavBarComposeView
+                    if (navView != null) {
+                        (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
+                        return@setOnKeyListener true
+                    }
+                    false
+                } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
+                    // Optional: allow RIGHT to jump to search
+                    val navView = topNavBarComposeView
+                    if (navView != null) {
+                        (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                        return@setOnKeyListener true
+                    }
+                    false
                 } else {
                     false
                 }
             }
 
-            // Also add a fallback listener on each hero card to defensively handle DOWN presses
             heroCards.forEach { card ->
                 card.setOnKeyListener { _, keyCode, event ->
                     if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
@@ -436,13 +382,27 @@ class HomeFragment : Fragment() {
                         } else {
                             false
                         }
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
+                        // Move focus to nav bar (last-focused item preferred)
+                        val navView = topNavBarComposeView
+                        if (navView != null) {
+                            (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
+                            return@setOnKeyListener true
+                        }
+                        false
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
+                        // RIGHT can also jump directly to search
+                        topNavBarComposeView?.let { navView ->
+                            (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                            return@setOnKeyListener true
+                        }
+                        false
                     } else {
                         false
                     }
                 }
             }
         } else {
-            // If first rail isn't populated yet, defer wiring until layout pass completes
             continueWatchingRail.post {
                 val targetId = continueWatchingFirstCardId.takeIf { it != View.NO_ID }
                 if (targetId != null) {
@@ -453,9 +413,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    /**
-     * Updates TV Channels rail with fetched data.
-     */
     private fun updateTvChannelsRail(channels: List<TvChannel>) {
         tvChannelsRail.removeAllViews()
 
@@ -463,13 +420,9 @@ class HomeFragment : Fragment() {
 
         channels.forEachIndexed { index, channel ->
             val card = TvChannelCard(requireContext()).apply {
-                // Give each card a stable view id for focus routing
                 id = View.generateViewId()
-                // Ensure upward focus moves to the first rail (Continue Watching) as requested
                 val upId = if (continueWatchingFirstCardId != View.NO_ID) continueWatchingFirstCardId else continueWatchingRail.id
                 nextFocusUpId = upId
-
-                // Respect current rails focus gate
                 isFocusable = railsFocusEnabled
                 isFocusableInTouchMode = railsFocusEnabled
                 descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
@@ -481,44 +434,44 @@ class HomeFragment : Fragment() {
             tvChannelsRail.addView(card)
         }
 
-        // Persist first card id for TV channels rail (not directly used for this fix but kept for symmetry)
         tvChannelsFirstCardId = firstCardLocalId
     }
 
     /**
-     * Adds the Compose TopNavBar to the rootContainer.
-     * Requirements:
-     * - 18dp from the top of the screen
-     * - Horizontally centered
-     * - Container modifier must be exactly the specified chain inside TopNavBar
-     * - Initial focus on search icon
-     * - Arrow navigation LEFT/RIGHT cycles within the group; DOWN goes to hero
+     * Adds the Compose TopNavBar to the rootContainer with DPAD routing to hero.
      */
     private fun addComposeTopNavBar() {
-        // We mount a ComposeView above other sections with a top margin of 18dp from the root container top.
         val composeView = ComposeView(requireContext()).apply {
-            // Dispose composition to avoid leaks
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Do not set a fixed top margin; symmetric top spacing will be applied to rootContainer padding.
-                // Slightly increase the bottom margin to widen the gap to the hero (adds ~6dp).
                 bottomMargin = dpToPx(14)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
 
-            // Make ComposeView focusable so it can receive and delegate focus to Compose elements
             id = View.generateViewId()
             isFocusable = true
             isFocusableInTouchMode = true
 
-            // Intercept DPAD_DOWN to open the focus gate for rails and move focus to hero card
+            // Provide a runnable to move focus to the hero container from within Compose
+            setTag(
+                R.id.tag_request_focus_hero,
+                Runnable {
+                    setRailsFocusable(true)
+                    if (heroCards.isNotEmpty()) {
+                        heroCards.first().requestFocus()
+                    } else {
+                        heroBannerView?.requestFocus()
+                    }
+                }
+            )
+
+            // Intercept DPAD_DOWN at the nav host to move into hero if needed (fallback)
             setOnKeyListener { _, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
                     setRailsFocusable(true)
-                    // Focus the first hero card if present; fallback to banner container
                     if (heroCards.isNotEmpty()) {
                         heroCards.first().requestFocus()
                     } else {
@@ -530,16 +483,14 @@ class HomeFragment : Fragment() {
             }
 
             setContent {
-                // Use Material3 adapter to ensure typography tokens are available
+                // Minimal Material3 environment
                 androidx.compose.material3.MaterialTheme {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.TopCenter
                     ) {
                         TopNavBar(
-                            // Click handlers are stubs
-                            onItemClick = { /* no-op for now */ },
+                            onItemClick = { /* No-op click handlers for now */ },
                             requestInitialFocus = true
                         )
                     }
@@ -547,7 +498,6 @@ class HomeFragment : Fragment() {
             }
         }
 
-        // Store reference for focus management
         topNavBarComposeView = composeView
         topNavBarId = composeView.id
         rootContainer.addView(composeView)
@@ -555,36 +505,23 @@ class HomeFragment : Fragment() {
 
     /**
      * Sets up the hero banner section as a horizontally scrollable carousel.
-     * - Fixed container size: 872dp x 222dp
-     * - Multiple hero cards: each exactly 872dp x 222dp
-     * - Auto-advances every 3 seconds, loops to start
-     * - D-pad:
-     *   LEFT/RIGHT -> navigate between cards (focusable children)
-     *   UP -> Top navigation bar
-     *   DOWN -> Content rails (first card in Continue Watching)
      */
     private fun setupHeroBanner() {
-        // Compute card px values
         heroCardWidthPx = dpToPx(heroCardWidthDp)
         heroCardHeightPx = dpToPx(heroCardHeightDp)
         heroCardSpacingPx = dpToPx(heroCardSpacingDp)
         heroPeekPx = dpToPx(heroPeekDp)
-        heroSidePaddingPx = 0 // will compute after layout from viewport width and desired peek
+        heroSidePaddingPx = 0
 
-        // Root hero container: full-bleed width (compensate rootContainer side paddings)
         val container = FrameLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             ).apply {
-                // Do not set fixed topMargin. We will measure actual distance from nav to hero
-                // and then apply the same value above the nav as rootContainer padding top.
-                // Root container has 88dp start/end padding; use negative margins to allow full width bleed
                 marginStart = -dpToPx(88)
                 marginEnd = -dpToPx(88)
                 gravity = Gravity.CENTER_HORIZONTAL
             }
-            // Disable clipping so peeking and any focus effects won't be cut
             clipToPadding = false
             clipChildren = false
             setBackgroundColor(Color.TRANSPARENT)
@@ -595,9 +532,7 @@ class HomeFragment : Fragment() {
         heroBannerId = container.id
         heroBannerView = container
 
-        // HorizontalScrollView: full width, dynamic side padding set after layout
         val hsv = object : HorizontalScrollView(requireContext()) {
-            // Disable over-scroll glow for TV polish
             override fun overScrollBy(
                 deltaX: Int,
                 deltaY: Int,
@@ -619,27 +554,23 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heroCardHeightPx
             )
-            // Padding set after layout based on measured width; do not clip peeks
             setPadding(0, 0, 0, 0)
             clipToPadding = false
             clipChildren = false
             isHorizontalScrollBarEnabled = false
             isSmoothScrollingEnabled = true
 
-            // Route UP to nav from inside carousel
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
 
-            // Pause auto-scroll when user is interacting with DPAD within the hero
             setOnKeyListener { _, keyCode, event ->
                 if (event.action == KeyEvent.ACTION_DOWN &&
                     (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
                 ) {
                     pauseAutoScrollForUserInteraction()
                 }
-                // Fallback: if DOWN is pressed while focus is within hero, route to first rail
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
                     val targetId = continueWatchingFirstCardId
                     val target = if (targetId != View.NO_ID) view?.findViewById<View>(targetId) else null
@@ -649,7 +580,15 @@ class HomeFragment : Fragment() {
                         return@setOnKeyListener true
                     }
                 }
-                // NEW: Route DPAD_RIGHT from hero area to search in TopNavBar
+                // NEW: Route DPAD_UP to nav bar (last-focused preferred; fallback to search)
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
+                    val navView = topNavBarComposeView
+                    if (navView != null) {
+                        (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
+                        return@setOnKeyListener true
+                    }
+                }
+                // Route DPAD_RIGHT from hero area to search in TopNavBar
                 if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
                     val navView = topNavBarComposeView
                     if (navView != null) {
@@ -674,7 +613,6 @@ class HomeFragment : Fragment() {
         }
         heroRail = rail
 
-        // Create hero cards: exactly 872 x 222
         heroTitles.forEachIndexed { index, title ->
             val card = HeroCard(requireContext()).apply {
                 id = View.generateViewId()
@@ -682,10 +620,8 @@ class HomeFragment : Fragment() {
                     heroCardWidthPx,
                     heroCardHeightPx
                 ).apply {
-                    // spacing between cards to retain 34dp peek visibility
                     marginEnd = heroCardSpacingPx
                 }
-                // UP should go to top nav
                 if (topNavBarId != View.NO_ID) {
                     nextFocusUpId = topNavBarId
                 }
@@ -693,27 +629,21 @@ class HomeFragment : Fragment() {
                 isFocusableInTouchMode = true
                 setTitle(title)
 
-                // Ensure card keeps 0dp radius (already enforced in HeroCard) and re-center on focus
                 setOnFocusChangeListener { v, hasFocus ->
                     if (hasFocus) {
-                        // If focus moved to this hero card by user DPAD, center it.
-                        // Guard against programmatic auto-advance from forcing focus/centering.
                         if (suppressFocusForAutoScroll) return@setOnFocusChangeListener
-                        // Only act if current global focus is inside the hero container
                         val scrollView = heroScrollView
                         val focusInsideHero = scrollView?.hasFocus() == true || heroCards.any { it.hasFocus() }
                         if (!focusInsideHero) return@setOnFocusChangeListener
 
                         val position = heroCards.indexOf(v as HeroCard).let { if (it >= 0) it else index }
                         pauseAutoScrollForUserInteraction()
-                        // Guarantee centering after layout to avoid race conditions
                         heroScrollView?.post {
                             centerHeroAt(position, animate = true)
                         }
                     }
                 }
 
-                // Ensure re-centering when attached (e.g., after data update or layout pass)
                 addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
                     if (suppressFocusForAutoScroll) return@addOnLayoutChangeListener
                     val scrollView = heroScrollView
@@ -726,7 +656,6 @@ class HomeFragment : Fragment() {
                     }
                 }
 
-                // Pause auto-advance when user navigates/presses on a hero card
                 setOnKeyListener { _, keyCode, keyEvent ->
                     if (keyEvent.action == KeyEvent.ACTION_DOWN &&
                         (keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
@@ -749,12 +678,16 @@ class HomeFragment : Fragment() {
                                 return@setOnKeyListener true
                             }
                         }
-                        // NEW: Direct DPAD_RIGHT to search icon explicitly if requested
                         if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                             topNavBarComposeView?.let { navView ->
                                 (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
                                 return@setOnKeyListener true
                             }
+                        }
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                        topNavBarComposeView?.let { navView ->
+                            (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
+                            return@setOnKeyListener true
                         }
                     }
                     false
@@ -767,21 +700,17 @@ class HomeFragment : Fragment() {
         hsv.addView(rail)
         container.addView(hsv)
 
-        // Ensure no parent clipping prevents peeking of adjacent cards
         container.clipChildren = false
         container.clipToPadding = false
         rail.clipChildren = false
         rail.clipToPadding = false
 
-        // Route DOWN from nav directly to the first hero card (no change to maintain behavior)
         heroCards.firstOrNull()?.let { first ->
             topNavBarComposeView?.nextFocusDownId = first.id
         }
 
-        // Add to root
         rootContainer.addView(container)
 
-        // Post a re-wiring step to set DOWN targets after layout/population if needed
         container.post {
             if (continueWatchingFirstCardId != View.NO_ID) {
                 heroBannerView?.nextFocusDownId = continueWatchingFirstCardId
@@ -789,85 +718,65 @@ class HomeFragment : Fragment() {
             }
         }
 
-        // After nav and hero exist, compute symmetric top spacing:
-        // top edge-to-nav gap should equal nav-to-hero gap.
-        // We set rootContainer's top padding to max(overscanMin, measuredNavToHero), where overscanMin = 36dp.
         container.post {
             val navView = topNavBarComposeView
             val heroView = heroBannerView
             if (navView != null && heroView != null) {
-                // Y positions relative to rootContainer
                 val navBottom = navView.bottom
                 val heroTop = heroView.top
                 val measuredGap = (heroTop - navBottom).coerceAtLeast(0)
                 navToHeroGapPx = measuredGap
 
                 val overscanMinTop = dpToPx(36)
-                // Set symmetric top padding: equals the nav-to-hero gap but not less than overscan minimum
                 val desiredTopPadding = navToHeroGapPx.coerceAtLeast(overscanMinTop)
 
-                // Current paddings
                 val currentLeft = rootContainer.paddingLeft
                 val currentRight = rootContainer.paddingRight
                 val currentBottom = rootContainer.paddingBottom
 
-                // Apply new top padding while preserving sides and bottom
                 rootContainer.setPadding(currentLeft, desiredTopPadding, currentRight, currentBottom)
 
-                // Ensure focus visuals not clipped
                 rootContainer.clipToPadding = false
                 rootContainer.clipChildren = false
             }
         }
 
-        // Recompute on layout width changes to maintain exact centering and peeking
         heroScrollView?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             val viewportWidth = heroScrollView?.width ?: 0
             if (viewportWidth > 0) {
-                // sidePadding = max(0, (viewportWidth - cardWidth)/2 - peek)
                 val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
                 heroSidePaddingPx = rawSide.coerceAtLeast(0)
                 heroScrollView?.setPadding(heroSidePaddingPx, 0, heroSidePaddingPx, 0)
                 heroScrollView?.clipToPadding = false
                 heroScrollView?.clipChildren = false
-                // Always keep current card centered after layout changes
                 heroScrollView?.post {
                     centerHeroAt(heroCurrentIndex, animate = false)
                 }
             }
         }
 
-        // After layout, compute side padding from actual viewport width to achieve equal peeking
         container.post {
             val viewportWidth = heroScrollView?.width ?: 0
             if (viewportWidth > 0) {
-                // sidePaddingPx = max(0, (viewportWidth - cardWidth)/2 - peek)
                 val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
                 heroSidePaddingPx = rawSide.coerceAtLeast(0)
                 heroScrollView?.setPadding(heroSidePaddingPx, 0, heroSidePaddingPx, 0)
 
-                // Ensure no clipping blocks peeking
                 heroScrollView?.clipToPadding = false
                 heroScrollView?.clipChildren = false
 
-                // Initially center the first card with symmetric peeking (34dp)
                 heroScrollView?.post {
                     centerHeroAt(heroCurrentIndex, animate = false)
                 }
             }
         }
 
-        // Ensure the parent root doesn't clip the full-bleed hero
         rootContainer.clipToPadding = false
         rootContainer.clipChildren = false
     }
 
     /**
-     * Centers the hero carousel at the given index so that the card is centered in the viewport,
-     * leaving partial visibility (peeking) of adjacent cards.
-     *
-     * @param index Target card index
-     * @param animate Whether to animate the scroll
+     * Centers the hero carousel at the given index.
      */
     private fun centerHeroAt(index: Int, animate: Boolean) {
         if (heroScrollView == null || heroCards.isEmpty()) return
@@ -876,12 +785,10 @@ class HomeFragment : Fragment() {
         val h = heroScrollView ?: return
         val viewportWidth = h.width
         if (viewportWidth <= 0) {
-            // Defer until after layout to avoid race conditions
             h.post { centerHeroAt(index, animate) }
             return
         }
 
-        // Ensure side padding honors 34dp peeks on both sides
         if (heroSidePaddingPx <= 0) {
             val rawSide = ((viewportWidth - heroCardWidthPx) / 2) - heroPeekPx
             heroSidePaddingPx = rawSide.coerceAtLeast(0)
@@ -890,7 +797,6 @@ class HomeFragment : Fragment() {
             h.clipChildren = false
         }
 
-        // Compute target scroll X so that target card center aligns with viewport center
         val unitWidth = heroCardWidthPx + heroCardSpacingPx
         val targetCenterX = heroSidePaddingPx + heroCurrentIndex * unitWidth + (heroCardWidthPx / 2f)
         val desiredScrollX = (targetCenterX - (viewportWidth / 2f)).toInt().coerceAtLeast(0)
@@ -900,7 +806,6 @@ class HomeFragment : Fragment() {
             return
         }
 
-        // Smooth scroll with ValueAnimator for deterministic duration/easing
         heroScrollAnimator?.cancel()
         val startX = h.scrollX
         val endX = desiredScrollX
@@ -913,19 +818,13 @@ class HomeFragment : Fragment() {
                 val x = animator.animatedValue as Int
                 h.scrollTo(x, 0)
             }
-            // Never call requestFocus() here, and avoid any focus clears
             start()
         }
     }
 
-    /**
-     * Pause auto-scroll because the user interacted (e.g., DPAD navigation).
-     * Auto-scroll will resume after a short idle.
-     */
     private fun pauseAutoScrollForUserInteraction() {
         autoScrollPausedByUser = true
         stopHeroAutoScroll()
-        // Schedule resume after idle window
         heroHandler.removeCallbacks(resumeAutoScrollRunnable)
         heroHandler.postDelayed(resumeAutoScrollRunnable, heroAutoScrollResumeIdleMs)
     }
@@ -935,9 +834,6 @@ class HomeFragment : Fragment() {
         startHeroAutoScroll()
     }
 
-    /**
-     * Starts hero auto-scroll (3s interval) if not paused.
-     */
     private fun startHeroAutoScroll() {
         heroHandler.removeCallbacks(heroAutoScrollRunnable)
         if (!autoScrollPausedByUser) {
@@ -945,18 +841,10 @@ class HomeFragment : Fragment() {
         }
     }
 
-    /**
-     * Stops hero auto-scroll immediately.
-     */
     private fun stopHeroAutoScroll() {
         heroHandler.removeCallbacks(heroAutoScrollRunnable)
     }
 
-    /**
-     * Sets up the Continue Watching section with horizontal scrolling cards.
-     * Position: 56dp below hero banner
-     * Title: "Seguí viendo" (24sp, white, bold)
-     */
     private fun setupContinueWatchingSection() {
         val sectionContainer = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
@@ -964,33 +852,27 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set spacing between hero carousel and "Seguí viendo" title to 10dp (per requirement)
                 topMargin = dpToPx(10)
             }
-            // Keep RTL-aware zero padding here; card start offset handled by inner scroll
             setPaddingRelative(0, 0, 0, 0)
             clipToPadding = false
             clipChildren = false
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
-        // Section title
         val title = TextView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set title-to-rail gap to 10dp to maintain clearer separation
                 bottomMargin = dpToPx(10)
             }
             text = "Seguí viendo"
             textSize = 16f
             setTextColor(Color.WHITE)
-            // Set to regular/normal weight as requested
             typeface = android.graphics.Typeface.DEFAULT
         }
 
-        // Loading indicator
         continueWatchingLoadingView = TextView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1003,33 +885,26 @@ class HomeFragment : Fragment() {
             visibility = View.GONE
         }
 
-        // Horizontal scroll view for cards
         val scrollView = HorizontalScrollView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             isHorizontalScrollBarEnabled = false
-            // Prevent scroll view from stealing focus
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-            // No parent focus interception; let child cards take DPAD focus
             isFocusable = false
             isFocusableInTouchMode = false
             clipToPadding = false
             clipChildren = false
-            // 10dp start padding so first item starts 10dp from the left (RTL-aware via relative padding)
             setPaddingRelative(dpToPx(10), 0, 0, 0)
-            // Route UP into the TopNavBar if user navigates upwards from within the rail
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
             isSmoothScrollingEnabled = true
 
-            // Intercept DPAD_UP within the first rail: let default View system handle going to TopNavBar.
-            // No special handling here; keep behavior unchanged.
             setOnKeyListener { _, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
-                    // Do not consume; system will use nextFocusUpId from child cards (TopNavBar)
+                    // Let system handle via nextFocusUpId (TopNavBar)
                     return@setOnKeyListener false
                 }
                 false
@@ -1042,10 +917,8 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            // Prevent rail from stealing focus initially; gating is handled separately
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            // Avoid clipping on focus scale and keep RTL-aware spacing
             clipToPadding = false
             clipChildren = false
         }
@@ -1057,11 +930,6 @@ class HomeFragment : Fragment() {
         rootContainer.addView(sectionContainer)
     }
 
-    /**
-     * Sets up the TV Channels section with horizontal scrolling cards.
-     * Position: 72dp below Continue Watching
-     * Title: "Canales de TV" (24sp, white, bold)
-     */
     private fun setupTvChannelsSection() {
         val sectionContainer = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
@@ -1069,7 +937,6 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set vertical spacing between rail rows to 10dp (per requirement)
                 topMargin = dpToPx(10)
             }
             setPaddingRelative(0, 0, 0, 0)
@@ -1078,23 +945,19 @@ class HomeFragment : Fragment() {
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
 
-        // Section title
         val title = TextView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                // Set title-to-rail gap to 10dp for consistency
                 bottomMargin = dpToPx(10)
             }
             text = "Canales de TV"
             textSize = 16f
             setTextColor(Color.WHITE)
-            // Set to regular/normal weight as requested
             typeface = android.graphics.Typeface.DEFAULT
         }
 
-        // Loading indicator
         tvChannelsLoadingView = TextView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1107,36 +970,28 @@ class HomeFragment : Fragment() {
             visibility = View.GONE
         }
 
-        // Horizontal scroll view for TV cards
         val scrollView = HorizontalScrollView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             isHorizontalScrollBarEnabled = false
-            // Prevent scroll view from stealing focus
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             isFocusable = false
             isFocusableInTouchMode = false
-            // First item offset 10dp from start; RTL-aware
             setPaddingRelative(dpToPx(10), 0, 0, 0)
-            // Route UP into the TopNavBar if user navigates upwards from within the rail (fallback)
             if (topNavBarId != View.NO_ID) {
                 nextFocusUpId = topNavBarId
             }
             isSmoothScrollingEnabled = true
 
-            // Intercept DPAD_UP when focus is within the second rail; move to first rail's first focusable child
             setOnKeyListener { _, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
-                    // Prefer explicit routing to the first card in Continue Watching if available
                     val targetId = if (continueWatchingFirstCardId != View.NO_ID) {
                         continueWatchingFirstCardId
                     } else {
-                        // Fallback to container itself (system will find a child)
                         continueWatchingRail.id
                     }
-                    // Request focus on target
                     val target = view?.findViewById<View>(targetId)
                     if (target != null) {
                         target.requestFocus()
@@ -1153,7 +1008,6 @@ class HomeFragment : Fragment() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            // Prevent rail from stealing focus initially; gating is handled separately
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
             clipToPadding = false
@@ -1168,12 +1022,11 @@ class HomeFragment : Fragment() {
     }
 
     /**
-     * Focus gate: enable or disable focus for rails. When disabled, rails won't receive focus until DOWN is pressed on nav.
+     * Focus gate: enable or disable focus for rails. When disabled, rails won’t receive focus until DOWN is pressed on nav.
      */
     private fun setRailsFocusable(enabled: Boolean) {
         railsFocusEnabled = enabled
 
-        // Accessibility gating (hide descendants from focus/AT when disabled)
         continueWatchingRail.importantForAccessibility =
             if (enabled) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
             else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -1181,7 +1034,6 @@ class HomeFragment : Fragment() {
             if (enabled) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
             else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
 
-        // Update all existing child cards
         for (i in 0 until continueWatchingRail.childCount) {
             val child = continueWatchingRail.getChildAt(i)
             child.isFocusable = enabled
@@ -1198,7 +1050,6 @@ class HomeFragment : Fragment() {
         return (dp * resources.displayMetrics.density).toInt()
     }
 
-    // Helper for fractional dp needs (e.g., 0.5dp)
     private fun dpToPxF(dp: Float): Int {
         return (dp * resources.displayMetrics.density).toInt()
     }
