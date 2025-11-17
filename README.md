@@ -9,10 +9,11 @@ This is the initial README file for the project.
   ./gradlew clean :app:assembleDebug --no-daemon --stacktrace --info
 
 - Key configuration already applied:
-  - org.gradle.daemon=false
+  - org.gradle.daemon=false (single-use daemon messages are expected; we still pass --no-daemon in CI)
   - org.gradle.workers.max=2
   - org.gradle.parallel=false
   - org.gradle.caching=false
+  - org.gradle.unsafe.configuration-cache=false
   - org.gradle.jvmargs includes -Dsun.zip.disableMemoryMapping=true to avoid packaging errors in constrained environments.
 
 - Resource merge troubleshooting:
@@ -21,3 +22,4 @@ This is the initial README file for the project.
   - Avoid invalid qualifiers like values-b+sr+Latn or malformed folder names.
   - If merge fails, re-run with: ./gradlew :app:mergeDebugResources --no-daemon --stacktrace --info
   - Clean intermediates: ./gradlew clean before rebuilding to force aapt2 to recompile resources.
+  - If you encounter mergeDebugJavaResource cacheDir NoSuchFileException, run scripts/ci_clean_build.sh to purge incremental caches and rebuild in a non-daemon mode.
