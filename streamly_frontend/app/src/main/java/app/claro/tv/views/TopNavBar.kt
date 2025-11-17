@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
@@ -44,23 +46,33 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.claro.tv.R
 import kotlinx.coroutines.delay
+
+// Local sealed hierarchy must be top-level (not local) to compile correctly in Kotlin.
+private sealed class NavVisual {
+    data class IconItem(val icon: ImageVector, val contentDesc: String) : NavVisual()
+    data class LabelItem(val text: String) : NavVisual()
+}
 
 /**
  * PUBLIC_INTERFACE
  * A compact Android TV top navigation bar built with Jetpack Compose.
- * - Horizontally centered, positioned by parent (18dp from top).
- * - Container uses: Modifier.padding(0.dp).width(579.5.dp).height(32.dp)
- *   .background(Color(0xFF28292F), RoundedCornerShape(17.dp))
- * - Items: Search icon, "Inicio", "Peliculas", "Series", "TV en vivo", "Kids", "Mis Contenidos"
- * - Visible focus: pill-shaped background (#DE1717), radius=18.5dp, height=26.5dp.
- * - Each item is independently focusable with explicit DPAD left/right chaining.
- * - Exposes runnables via host view tags to request search focus and last-focused nav item.
+ * - Container uses exact spec:
+ *   Modifier.padding(0.dp).width(579.5.dp).height(32.dp)
+ *     .background(Color(0xFF28292F), RoundedCornerShape(17.dp))
+ * - Items: Search icon, "Inicio", "Peliculas", "Series", "TV en vivo", "Kids", "Mis Contenidos", Avatar
+ * - Focus: each item is focusable with DPAD LEFT/RIGHT chaining; focused item shows red pill (#DE1717) with 18.5dp radius
+ * - Label text size: 14.5sp
+ * - Exposes runnables via host view tags to:
+ *   - focus Search (R.id.tag_request_search_focus)
+ *   - restore last-focused nav item (R.id.tag_request_last_nav_focus)
+ *   - move DOWN to hero (consumed via FocusablePill on DPAD_DOWN using R.id.tag_request_focus_hero)
  *
  * Params:
- * - onItemClick: stub click handler for item activation.
- * - requestInitialFocus: when true, focuses the Search icon initially.
+ * - onItemClick: invoked when an item is "clicked" (DPAD_CENTER/ENTER)
+ * - requestInitialFocus: when true, focuses the Search icon initially
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -69,18 +81,20 @@ fun TopNavBar(
     onItemClick: (index: Int) -> Unit = {},
     requestInitialFocus: Boolean = true
 ) {
-    // Keep the textual/structural contents unchanged
-    val labels = listOf(
-        "SEARCH_ICON",
-        "Inicio", "Peliculas", "Series", "TV en vivo", "Kids", "Mis Contenidos"
+    // Keep the textual/structural contents; append Avatar per requirement
+    val navItems: List<NavVisual> = listOf(
+        NavVisual.IconItem(Icons.Filled.Search, "Search"),
+        NavVisual.LabelItem("Inicio"),
+        NavVisual.LabelItem("Peliculas"),
+        NavVisual.LabelItem("Series"),
+        NavVisual.LabelItem("TV en vivo"),
+        NavVisual.LabelItem("Kids"),
+        NavVisual.LabelItem("Mis Contenidos"),
+        NavVisual.IconItem(Icons.Filled.AccountCircle, "Avatar")
     )
 
     // Focus requesters: one per nav item, first is dedicated for search
-    val searchFocusRequester = remember { FocusRequester() }
-    val otherRequesters = remember { List(labels.size - 1) { FocusRequester() } }
-    val requesters = remember(searchFocusRequester, otherRequesters) {
-        listOf(searchFocusRequester) + otherRequesters
-    }
+    val requesters = remember { List(navItems.size) { FocusRequester() } }
 
     // Track the last-focused nav item index to restore focus when moving up from hero
     var lastFocusedIndex by remember { mutableIntStateOf(0) }
@@ -91,7 +105,7 @@ fun TopNavBar(
         R.id.tag_request_search_focus,
         Runnable {
             try {
-                searchFocusRequester.requestFocus()
+                requesters.firstOrNull()?.requestFocus()
             } catch (_: IllegalStateException) {
             }
         }
@@ -112,7 +126,7 @@ fun TopNavBar(
             try {
                 // slight delay to ensure composition is attached to a window
                 delay(60)
-                searchFocusRequester.requestFocus()
+                requesters.firstOrNull()?.requestFocus()
             } catch (_: IllegalStateException) {
             }
         }
@@ -133,28 +147,43 @@ fun TopNavBar(
                 .padding(horizontal = 12.dp)
                 .focusGroup(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.Center
         ) {
-            labels.forEachIndexed { index, label ->
-                val isIcon = index == 0
+            navItems.forEachIndexed { index, item ->
                 val leftRequester = requesters[(index - 1).coerceAtLeast(0)]
                 val rightRequester = requesters[(index + 1).coerceAtMost(requesters.lastIndex)]
 
-                FocusablePill(
-                    isIcon = isIcon,
-                    label = if (isIcon) null else label,
-                    onClick = { onItemClick(index) },
-                    focusRequester = requesters[index],
-                    leftRequester = leftRequester,
-                    rightRequester = rightRequester,
-                    onFocusedChanged = { hasFocus ->
-                        if (hasFocus) {
-                            lastFocusedIndex = index
+                when (item) {
+                    is NavVisual.IconItem -> {
+                        FocusablePill(
+                            icon = item.icon,
+                            label = null,
+                            contentDescription = item.contentDesc,
+                            onClick = { onItemClick(index) },
+                            focusRequester = requesters[index],
+                            leftRequester = leftRequester,
+                            rightRequester = rightRequester
+                        ) { hasFocus ->
+                            if (hasFocus) lastFocusedIndex = index
                         }
                     }
-                )
 
-                if (index < labels.lastIndex) {
+                    is NavVisual.LabelItem -> {
+                        FocusablePill(
+                            icon = null,
+                            label = item.text,
+                            contentDescription = item.text,
+                            onClick = { onItemClick(index) },
+                            focusRequester = requesters[index],
+                            leftRequester = leftRequester,
+                            rightRequester = rightRequester
+                        ) { hasFocus ->
+                            if (hasFocus) lastFocusedIndex = index
+                        }
+                    }
+                }
+
+                if (index < navItems.lastIndex) {
                     Spacer(modifier = Modifier.width(8.dp))
                 }
             }
@@ -169,8 +198,9 @@ fun TopNavBar(
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun FocusablePill(
-    isIcon: Boolean,
+    icon: ImageVector?,
     label: String?,
+    contentDescription: String,
     onClick: () -> Unit,
     focusRequester: FocusRequester,
     leftRequester: FocusRequester,
@@ -179,34 +209,29 @@ private fun FocusablePill(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     var focused by remember { mutableStateOf(false) }
+    val pillRadius = 18.5.dp
 
-    val pillShape = RoundedCornerShape(18.5.dp)
     val hostView = LocalView.current
-
-    val contentDesc = if (isIcon) "Search" else label.orEmpty()
 
     val baseModifier = Modifier
         .wrapContentWidth()
         .height(26.5.dp)
         .focusRequester(focusRequester)
-        .semantics { this.contentDescription = contentDesc }
+        .semantics { this.contentDescription = contentDescription }
         .focusTarget()
         .focusProperties {
             left = leftRequester
             right = rightRequester
-            // Up/Down are handled via onKeyEvent to ensure correct routing
         }
         .focusable(interactionSource = interactionSource)
         .onFocusChanged { state ->
             focused = state.hasFocus
             onFocusedChanged(state.hasFocus)
         }
-        // Use Compose drawBehind for the pill background tied to focus state,
-        // satisfying visible focus requirement without altering nav contents.
+        // Visible focus pill background
         .drawBehind {
             if (focused) {
-                // Draw a rounded rect "pill" red background under the item
-                val corner = 18.5.dp.toPx()
+                val corner = pillRadius.toPx()
                 drawRoundRect(
                     color = Color(0xFFDE1717),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(corner, corner)
@@ -218,18 +243,17 @@ private fun FocusablePill(
             val code = keyEvent.nativeKeyEvent.keyCode
             val actionDown = keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
             val actionUp = keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP
-
             when (code) {
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                     if (actionUp) onClick()
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    // Remain within nav bar when pressing UP
+                    // Stay within nav bar on UP
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    // Move focus to hero container via host runnable
+                    // Move focus to hero via host runnable
                     if (actionDown) {
                         (hostView.getTag(R.id.tag_request_focus_hero) as? Runnable)?.run()
                     }
@@ -243,10 +267,10 @@ private fun FocusablePill(
         modifier = baseModifier,
         contentAlignment = Alignment.Center
     ) {
-        if (isIcon) {
+        if (icon != null) {
             Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Search",
+                imageVector = icon,
+                contentDescription = contentDescription,
                 tint = Color.White,
                 modifier = Modifier.size(18.dp)
             )
@@ -256,7 +280,8 @@ private fun FocusablePill(
                 color = Color.White,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Normal,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                fontSize = 14.5.sp
             )
         }
     }
