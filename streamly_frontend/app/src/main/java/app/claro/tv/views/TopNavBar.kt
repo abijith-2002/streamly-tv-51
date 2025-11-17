@@ -137,14 +137,17 @@ fun TopNavBar(
     Box(
         modifier = modifier
             .padding(0.dp)
-            .width(579.5.dp)
+            // Increase width to prevent label wrapping for "Mis Contenidos"
+            // Keep height and radius per spec while ensuring overscan-safe area usage.
+            .width(660.dp)
             .height(32.dp)
             .background(color = Color(0xFF28292F), shape = containerShape),
         contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp)
+                // Slightly reduce horizontal padding to reclaim space for labels
+                .padding(horizontal = 10.dp)
                 .focusGroup(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -184,7 +187,8 @@ fun TopNavBar(
                 }
 
                 if (index < navItems.lastIndex) {
-                    Spacer(modifier = Modifier.width(8.dp))
+                    // Slightly reduce inter-item gap to fit long labels safely
+                    Spacer(modifier = Modifier.width(6.dp))
                 }
             }
         }
@@ -238,7 +242,7 @@ private fun FocusablePill(
                 )
             }
         }
-        .padding(horizontal = 12.dp)
+        .padding(horizontal = 10.dp)
         .onKeyEvent { keyEvent ->
             val code = keyEvent.nativeKeyEvent.keyCode
             val actionDown = keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
