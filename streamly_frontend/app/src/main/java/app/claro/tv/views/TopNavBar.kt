@@ -40,7 +40,9 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.border
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.platform.LocalView
 import kotlinx.coroutines.delay
+import app.claro.tv.R
 
 /**
  * PUBLIC_INTERFACE
@@ -56,6 +58,10 @@ import kotlinx.coroutines.delay
  * Params:
  * - onItemClick: stub click handler for each item, index based (0 = search)
  * - requestInitialFocus: when true, requests focus on the search icon
+ *
+ * Additional:
+ * - Exposes requestSearchFocus() through a View lambda so non-Compose code can move focus
+ *   (e.g., DPAD_RIGHT override from hero/initial area).
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -64,29 +70,35 @@ fun TopNavBar(
     onItemClick: (index: Int) -> Unit = {},
     requestInitialFocus: Boolean = true
 ) {
-    // Items including search as first logical element
     val labels = listOf(
         "SEARCH_ICON",
         "Inicio", "Peliculas", "Series", "TV en vivo", "Kids", "Mis Contenidos"
     )
 
-    // Focus requester for search icon (first item)
     val searchFocusRequester = remember { FocusRequester() }
 
-    // Request initial focus on search icon
+    // Provide a bridge: attach a callback on the hosting Android View to request search focus
+    val hostView = LocalView.current
+    hostView.setTag(
+        R.id.tag_request_search_focus,
+        Runnable {
+            try {
+                searchFocusRequester.requestFocus()
+            } catch (_: IllegalStateException) {
+            }
+        }
+    )
+
     LaunchedEffect(requestInitialFocus) {
         if (requestInitialFocus) {
             try {
-                // Small delay to ensure focus node is attached before requesting focus
                 delay(60)
                 searchFocusRequester.requestFocus()
-            } catch (e: IllegalStateException) {
-                // Ignore if focus requester is not yet attached
+            } catch (_: IllegalStateException) {
             }
         }
     }
 
-    // Container: EXACT modifier chain as requested
     val containerShape = RoundedCornerShape(size = 17.dp)
     Box(
         modifier = modifier
@@ -103,11 +115,8 @@ fun TopNavBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // We lay them evenly by distributing space between items
-            // Create 7 focusable items (icon + 6 text items)
             labels.forEachIndexed { index, label ->
                 if (index == 0) {
-                    // Search Icon item with focus requester
                     FocusablePill(
                         isIcon = true,
                         label = null,
@@ -145,29 +154,18 @@ private fun FocusablePill(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     var focused by remember { mutableStateOf(false) }
-    
-    // Focus background color: #9B0F0F when focused, transparent otherwise
-    val focusBackgroundColor = if (focused) Color(0xFF9B0F0F) else Color.Transparent
-    
-    // Pill shape with corner radius 18.5dp
-    val pillShape = RoundedCornerShape(18.5.dp)
 
+    val pillShape = RoundedCornerShape(18.5.dp)
     var focusableModifier = Modifier
         .wrapContentWidth()
         .height(26.5.dp)
-        .background(color = focusBackgroundColor, shape = pillShape)
-        // Temporary debug border to verify focus state; remove after validation
-        .then(
-            if (focused) Modifier.border(width = 1.dp, color = Color.White, shape = pillShape)
-            else Modifier
-        )
-        .padding(horizontal = 12.dp) // include horizontal padding inside pill width
-    
-    // Apply focus requester if provided (for search icon)
+        .background(color = if (focused) Color(0xFF9B0F0F) else Color.Transparent, shape = pillShape)
+        .padding(horizontal = 12.dp)
+
     if (focusRequester != null) {
         focusableModifier = focusableModifier.focusRequester(focusRequester)
     }
-    
+
     focusableModifier = focusableModifier
         .focusTarget()
         .focusProperties { canFocus = true }
@@ -193,7 +191,7 @@ private fun FocusablePill(
         if (isIcon) {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = "Buscar",
+                contentDescription = "Search",
                 tint = Color.White,
                 modifier = Modifier.size(18.dp)
             )

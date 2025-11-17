@@ -36,6 +36,7 @@ import app.claro.tv.views.ContinueWatchingCard
 import app.claro.tv.views.TopNavBar
 import app.claro.tv.views.TvChannelCard
 import app.claro.tv.views.HeroCard
+import app.claro.tv.R
 
 /**
  * PUBLIC_INTERFACE
@@ -220,12 +221,25 @@ class HomeFragment : Fragment() {
         // The TopNavBar Composable will internally request focus on the search icon
         view.post {
             topNavBarComposeView?.let { composeView ->
-                // Make the ComposeView focusable and request focus
-                // This will trigger the LaunchedEffect in TopNavBar to focus the search icon
+                // Make the ComposeView focusable so internal FocusRequester can work
                 composeView.isFocusable = true
                 composeView.isFocusableInTouchMode = true
+                // Ask the Composable to move focus to the Search icon via the exposed tag runnable
+                (composeView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                // As a fallback, request focus on the ComposeView; TopNavBar will shift it to the search icon
                 composeView.requestFocus()
             }
+        }
+
+        // Add a global DPAD_RIGHT fallback to jump to search from any initial region
+        view.rootView?.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
+                topNavBarComposeView?.let { navView ->
+                    (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                    return@setOnKeyListener true
+                }
+            }
+            false
         }
 
         // Observe ViewModel state changes
@@ -635,7 +649,14 @@ class HomeFragment : Fragment() {
                         return@setOnKeyListener true
                     }
                 }
-                // Never consume focus events if focus is outside hero; let them propagate
+                // NEW: Route DPAD_RIGHT from hero area to search in TopNavBar
+                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
+                    val navView = topNavBarComposeView
+                    if (navView != null) {
+                        (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                        return@setOnKeyListener true
+                    }
+                }
                 false
             }
         }
@@ -715,18 +736,23 @@ class HomeFragment : Fragment() {
                     ) {
                         pauseAutoScrollForUserInteraction()
                         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                            // Determine next index similar to a pager navigation and center it
                             val currentIdx = heroCards.indexOf(this@apply)
                             if (currentIdx >= 0) {
                                 val delta = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
                                 val nextIndex = (currentIdx + delta + heroCards.size) % heroCards.size
                                 heroScrollView?.post {
                                     centerHeroAt(nextIndex, animate = true)
-                                    // Do not force focus reassignment here; DPAD will naturally keep focus on the moved card
                                     if (!suppressFocusForAutoScroll) {
                                         heroCards.getOrNull(nextIndex)?.requestFocus()
                                     }
                                 }
+                                return@setOnKeyListener true
+                            }
+                        }
+                        // NEW: Direct DPAD_RIGHT to search icon explicitly if requested
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                            topNavBarComposeView?.let { navView ->
+                                (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
                                 return@setOnKeyListener true
                             }
                         }
