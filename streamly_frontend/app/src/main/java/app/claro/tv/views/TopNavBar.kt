@@ -41,6 +41,8 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
 import app.claro.tv.R
 
@@ -159,14 +161,18 @@ private fun FocusablePill(
     var focusableModifier = Modifier
         .wrapContentWidth()
         .height(26.5.dp)
-        .background(color = if (focused) Color(0xFF9B0F0F) else Color.Transparent, shape = pillShape)
+        .background(color = if (focused) Color(0xFFDE1717) else Color.Transparent, shape = pillShape)
         .padding(horizontal = 12.dp)
 
     if (focusRequester != null) {
         focusableModifier = focusableModifier.focusRequester(focusRequester)
     }
 
+    // Add semantic content description for accessibility
+    val contentDescription = if (isIcon) "Search" else label.orEmpty()
+    
     focusableModifier = focusableModifier
+        .semantics { this.contentDescription = contentDescription }
         .focusTarget()
         .focusProperties { canFocus = true }
         .focusable(interactionSource = interactionSource)
