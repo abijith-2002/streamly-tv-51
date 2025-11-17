@@ -93,10 +93,9 @@ fun TopNavBar(
         NavVisual.IconItem(Icons.Filled.AccountCircle, "Avatar")
     )
 
-    // Focus requesters: one per nav item, first is dedicated for search
+    // Focus requesters to handle focus navigation between nav items
     val requesters = remember { List(navItems.size) { FocusRequester() } }
-
-    // Track the last-focused nav item index to restore focus when moving up from hero
+    // Track the last focused nav item to restore focus when moving from hero
     var lastFocusedIndex by remember { mutableIntStateOf(0) }
 
     // Expose runnables on the host view to allow non-Compose code to change focus
@@ -153,36 +152,32 @@ fun TopNavBar(
             horizontalArrangement = Arrangement.Center
         ) {
             navItems.forEachIndexed { index, item ->
-                val leftRequester = requesters[(index - 1).coerceAtLeast(0)]
-                val rightRequester = requesters[(index + 1).coerceAtMost(requesters.lastIndex)]
+                // Correctly set up circular navigation
+                val leftRequester = if (index > 0) requesters[index - 1] else requesters.last()
+                val rightRequester = if (index < navItems.lastIndex) requesters[index + 1] else requesters.first()
 
                 when (item) {
-                    is NavVisual.IconItem -> {
-                        FocusablePill(
-                            icon = item.icon,
-                            label = null,
-                            contentDescription = item.contentDesc,
-                            onClick = { onItemClick(index) },
-                            focusRequester = requesters[index],
-                            leftRequester = leftRequester,
-                            rightRequester = rightRequester
-                        ) { hasFocus ->
-                            if (hasFocus) lastFocusedIndex = index
-                        }
+                    is NavVisual.IconItem -> FocusablePill(
+                        icon = item.icon,
+                        label = null,
+                        contentDescription = item.contentDesc,
+                        onClick = { onItemClick(index) },
+                        focusRequester = requesters[index],
+                        leftRequester = leftRequester,
+                        rightRequester = rightRequester
+                    ) { hasFocus ->
+                        if (hasFocus) lastFocusedIndex = index
                     }
-
-                    is NavVisual.LabelItem -> {
-                        FocusablePill(
-                            icon = null,
-                            label = item.text,
-                            contentDescription = item.text,
-                            onClick = { onItemClick(index) },
-                            focusRequester = requesters[index],
-                            leftRequester = leftRequester,
-                            rightRequester = rightRequester
-                        ) { hasFocus ->
-                            if (hasFocus) lastFocusedIndex = index
-                        }
+                    is NavVisual.LabelItem -> FocusablePill(
+                        icon = null,
+                        label = item.text,
+                        contentDescription = item.text,
+                        onClick = { onItemClick(index) },
+                        focusRequester = requesters[index],
+        leftRequester = leftRequester,
+                        rightRequester = rightRequester
+                    ) { hasFocus ->
+                        if (hasFocus) lastFocusedIndex = index
                     }
                 }
 
@@ -226,6 +221,7 @@ private fun FocusablePill(
         .focusProperties {
             left = leftRequester
             right = rightRequester
+            up = FocusRequester.Default // Allow focus to move up out of the nav bar
         }
         .focusable(interactionSource = interactionSource)
         .onFocusChanged { state ->

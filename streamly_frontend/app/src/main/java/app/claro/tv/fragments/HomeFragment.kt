@@ -340,65 +340,40 @@ class HomeFragment : Fragment() {
             heroCards.forEach { it.nextFocusDownId = firstCardId }
 
             // Provide fallback DOWN handling from hero to this rail
-            heroScrollView?.setOnKeyListener { _, keyCode, event ->
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
-                    val target = view?.findViewById<View>(continueWatchingFirstCardId)
-                    if (target != null) {
-                        setRailsFocusable(true)
-                        target.requestFocus()
+            // This listener should not be overwritten. It handles key events for the hero scroll view.
+             heroScrollView?.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        topNavBarComposeView?.let {
+                            (it.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                        }
                         true
-                    } else {
-                        false
                     }
-                } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
-                    // Move focus to nav bar on UP; prefer last-focused item
-                    val navView = topNavBarComposeView
-                    if (navView != null) {
-                        (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
-                        return@setOnKeyListener true
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        view?.findViewById<View>(continueWatchingFirstCardId)?.requestFocus()
+                        true
                     }
-                    false
-                } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
-                    // Optional: allow RIGHT to jump to search
-                    val navView = topNavBarComposeView
-                    if (navView != null) {
-                        (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
-                        return@setOnKeyListener true
-                    }
-                    false
-                } else {
-                    false
+                    else -> false
                 }
             }
 
             heroCards.forEach { card ->
-                card.setOnKeyListener { _, keyCode, event ->
-                    if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
-                        val target = view?.findViewById<View>(continueWatchingFirstCardId)
-                        if (target != null) {
-                            setRailsFocusable(true)
-                            target.requestFocus()
+                // This listener should not be overwritten. It handles key events for the hero cards.
+                 card.setOnKeyListener { _, keyCode, event ->
+                    if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            topNavBarComposeView?.let {
+                                (it.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                            }
                             true
-                        } else {
-                            false
                         }
-                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
-                        // Move focus to nav bar (last-focused item preferred)
-                        val navView = topNavBarComposeView
-                        if (navView != null) {
-                            (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
-                            return@setOnKeyListener true
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            view?.findViewById<View>(continueWatchingFirstCardId)?.requestFocus()
+                            true
                         }
-                        false
-                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
-                        // RIGHT can also jump directly to search
-                        topNavBarComposeView?.let { navView ->
-                            (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
-                            return@setOnKeyListener true
-                        }
-                        false
-                    } else {
-                        false
+                        else -> false
                     }
                 }
             }
@@ -565,38 +540,22 @@ class HomeFragment : Fragment() {
             }
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
 
-            setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN &&
-                    (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
-                ) {
-                    pauseAutoScrollForUserInteraction()
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
-                    val targetId = continueWatchingFirstCardId
-                    val target = if (targetId != View.NO_ID) view?.findViewById<View>(targetId) else null
-                    if (target != null) {
-                        setRailsFocusable(true)
-                        target.requestFocus()
-                        return@setOnKeyListener true
+            // This listener should not be overwritten. It handles key events for the hero scroll view.
+             setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        topNavBarComposeView?.let {
+                            (it.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                        }
+                        true
                     }
-                }
-                // NEW: Route DPAD_UP to nav bar (last-focused preferred; fallback to search)
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
-                    val navView = topNavBarComposeView
-                    if (navView != null) {
-                        (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
-                        return@setOnKeyListener true
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        view?.findViewById<View>(continueWatchingFirstCardId)?.requestFocus()
+                        true
                     }
+                    else -> false
                 }
-                // Route DPAD_RIGHT from hero area to search in TopNavBar
-                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
-                    val navView = topNavBarComposeView
-                    if (navView != null) {
-                        (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
-                        return@setOnKeyListener true
-                    }
-                }
-                false
             }
         }
         heroScrollView = hsv
@@ -656,41 +615,22 @@ class HomeFragment : Fragment() {
                     }
                 }
 
-                setOnKeyListener { _, keyCode, keyEvent ->
-                    if (keyEvent.action == KeyEvent.ACTION_DOWN &&
-                        (keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-                                keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-                                keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                                keyCode == KeyEvent.KEYCODE_ENTER)
-                    ) {
-                        pauseAutoScrollForUserInteraction()
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                            val currentIdx = heroCards.indexOf(this@apply)
-                            if (currentIdx >= 0) {
-                                val delta = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
-                                val nextIndex = (currentIdx + delta + heroCards.size) % heroCards.size
-                                heroScrollView?.post {
-                                    centerHeroAt(nextIndex, animate = true)
-                                    if (!suppressFocusForAutoScroll) {
-                                        heroCards.getOrNull(nextIndex)?.requestFocus()
-                                    }
-                                }
-                                return@setOnKeyListener true
+                // This listener should not be overwritten. It handles key events for the hero cards.
+                 setOnKeyListener { _, keyCode, event ->
+                    if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            topNavBarComposeView?.let {
+                                (it.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
                             }
+                            true
                         }
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                            topNavBarComposeView?.let { navView ->
-                                (navView.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
-                                return@setOnKeyListener true
-                            }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            view?.findViewById<View>(continueWatchingFirstCardId)?.requestFocus()
+                            true
                         }
-                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && keyEvent.action == KeyEvent.ACTION_DOWN) {
-                        topNavBarComposeView?.let { navView ->
-                            (navView.getTag(R.id.tag_request_last_nav_focus) as? Runnable)?.run()
-                            return@setOnKeyListener true
-                        }
+                        else -> false
                     }
-                    false
                 }
             }
             heroCards.add(card)
