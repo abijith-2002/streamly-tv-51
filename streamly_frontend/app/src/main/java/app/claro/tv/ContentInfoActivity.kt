@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -313,8 +314,8 @@ private fun ContentInfoScreen(
             )
 
             items.forEachIndexed { index, it ->
-                val leftIndex = if (index - 1 < 0) items.lastIndex else index - 1
-                val rightIndex = if (index + 1 > items.lastIndex) 0 else index + 1
+                val leftFocus = if (index == 0) FocusRequester.Default else actionRequesters[index - 1]
+                val rightFocus = if (index == items.lastIndex) FocusRequester.Default else actionRequesters[index + 1]
 
                 FocusAwarePill(
                     modifier = Modifier.semantics { contentDescription = it.label },
@@ -326,8 +327,8 @@ private fun ContentInfoScreen(
                     focusColor = pillBgFocused,
                     unfocusColor = pillBgUnfocused,
                     focusRequester = actionRequesters[index],
-                    leftRequester = actionRequesters[leftIndex],
-                    rightRequester = actionRequesters[rightIndex],
+                    leftRequester = leftFocus,
+                    rightRequester = rightFocus,
                     upRequester = metadataFocusRequester,
                     sizeW = 52.dp,
                     sizeH = 40.dp,
@@ -418,17 +419,21 @@ private fun FocusAwarePill(
     iconSize: Dp,
     focusedIconColor: Color
 ) {
-    // Focus-driven state exclusively in this node
     var isFocused by remember { mutableStateOf(false) }
 
     val bgColor = if (isFocused) focusColor else unfocusColor
-    // Acceptance criteria:
-    // - focused -> background = focusColor, icon = #282828
-    // - unfocused -> background = unfocusColor, icon = focusColor
     val iconTint = if (isFocused) focusedIconColor else focusColor
     val textTint = iconTint
 
     val shape = RoundedCornerShape(corner)
+
+    // Scale to match Home rails (1.05f) with 200ms tween
+    val targetScale = if (isFocused) 1.05f else 1.0f
+    val scale = androidx.compose.animation.core.animateFloatAsState(
+        targetValue = targetScale,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 200),
+        label = "pillScale"
+    ).value
 
     Surface(
         color = bgColor,
@@ -437,16 +442,18 @@ private fun FocusAwarePill(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .requiredWidth(sizeW)
             .requiredHeight(sizeH)
             .focusRequester(focusRequester)
-            // Focus target and focusable are applied to this same node that also draws the background
             .focusTarget()
             .focusProperties {
                 left = leftRequester
                 right = rightRequester
                 up = upRequester
-                // Do not override "down" to keep default navigation and avoid consuming DPAD_DOWN
             }
             .onFocusChanged { state ->
                 val nowFocused = state.isFocused
@@ -459,7 +466,6 @@ private fun FocusAwarePill(
                 }
             }
             .focusable()
-            // Only handle DPAD_CENTER/ENTER for click; do not consume DPAD directional keys
             .onKeyEvent { key ->
                 val code = key.nativeKeyEvent.keyCode
                 val actionUp = key.nativeKeyEvent.action == KeyEvent.ACTION_UP
