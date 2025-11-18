@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.delay
 
 /**
  * PUBLIC_INTERFACE
@@ -173,6 +174,8 @@ private fun ContentInfoScreen(
     // Request initial focus to the first action button
     LaunchedEffect(Unit) {
         try {
+            // slight delay to ensure composition is attached to a window
+            delay(60)
             actionRequesters.firstOrNull()?.requestFocus()
         } catch (_: IllegalStateException) {
         }
