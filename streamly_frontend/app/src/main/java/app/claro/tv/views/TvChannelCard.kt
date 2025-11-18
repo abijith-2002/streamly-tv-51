@@ -225,6 +225,37 @@ class TvChannelCard @JvmOverloads constructor(
         progressBar.progress = (channel.progress * 100).toInt()
         liveBadge.visibility = if (channel.isLive) VISIBLE else GONE
         rentBadge.visibility = if (channel.isRentable) VISIBLE else GONE
+
+        // Navigate to ContentInfoActivity on click/DPAD_CENTER with metadata
+        setOnClickListener {
+            val ctx = context
+            val synopsis = buildString {
+                append(channel.programTitle)
+                append(" • ")
+                append(channel.channelName)
+                append(" ")
+                append(channel.startTime)
+                append("-")
+                append(channel.endTime)
+                if (channel.isLive) append(" • EN VIVO")
+            }
+            val intent = android.content.Intent(ctx, app.claro.tv.ContentInfoActivity::class.java).apply {
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_ID, channel.id)
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_TITLE, channel.programTitle)
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_SYNOPSIS, synopsis)
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_THUMBNAIL_URL, channel.thumbnailUrl)
+            }
+            ctx.startActivity(intent)
+        }
+        setOnKeyListener { _, keyCode, event ->
+            if (event.action == android.view.KeyEvent.ACTION_UP &&
+                (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || keyCode == android.view.KeyEvent.KEYCODE_ENTER)
+            ) {
+                performClick()
+                return@setOnKeyListener true
+            }
+            false
+        }
     }
 
     private fun dpToPx(dp: Int): Int {

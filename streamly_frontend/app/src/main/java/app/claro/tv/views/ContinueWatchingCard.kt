@@ -236,12 +236,35 @@ class ContinueWatchingCard @JvmOverloads constructor(
         }
         // Keep ProgressBar value in sync (used as internal state holder)
         progressBar.progress = (pct * 100).toInt()
+
+        // Navigate to ContentInfoActivity on click/DPAD_CENTER with metadata
+        setOnClickListener {
+            val ctx = context
+            val intent = android.content.Intent(ctx, app.claro.tv.ContentInfoActivity::class.java).apply {
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_ID, item.id)
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_TITLE, item.title)
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_SYNOPSIS, "Recomendado para vos. Progreso ${(item.progress * 100).toInt()}%")
+                putExtra(app.claro.tv.ContentInfoActivity.EXTRA_THUMBNAIL_URL, item.thumbnailUrl)
+            }
+            ctx.startActivity(intent)
+        }
+        setOnKeyListener { _, keyCode, event ->
+            if (event.action == android.view.KeyEvent.ACTION_UP &&
+                (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || keyCode == android.view.KeyEvent.KEYCODE_ENTER)
+            ) {
+                performClick()
+                return@setOnKeyListener true
+            }
+            false
+        }
     }
 
     private fun applyProgressToFill(progressFraction: Float) {
         // Effective usable width is track width minus the start inset (paddingStart), because the
         // inner indicator should start 2dp inside the track's start edge.
-        val trackTotalWidth = progressTrack.width.takeIf { it > 0 } ?: progressTrack.layoutParams.width
+        val measured = progressTrack.width
+        val layoutW = progressTrack.layoutParams.width
+        val trackTotalWidth = if (measured > 0) measured else layoutW
         val startInset = progressTrack.paddingStart
         val usableWidth = (trackTotalWidth - startInset).coerceAtLeast(0)
         val clamped = progressFraction.coerceIn(0f, 1f)
