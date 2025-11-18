@@ -210,13 +210,17 @@ class ContentInfoActivity : FragmentActivity() {
         unfocusedBg: String,
         textColor: String
     ): View {
+        // Use vars for colors to avoid "val cannot be reassigned" if future changes adjust them dynamically.
+        var focusedBgColor = focusedBg
+        var unfocusedBgColor = unfocusedBg
+
         val container = LinearLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)
             )
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(14), 0, dp(14), 0)
-            setBackgroundColor(Color.parseColor(unfocusedBg))
+            setBackgroundColor(Color.parseColor(unfocusedBgColor))
             isFocusable = true
             isFocusableInTouchMode = true
             id = View.generateViewId()
@@ -232,12 +236,12 @@ class ContentInfoActivity : FragmentActivity() {
             textSize = 16f
             textAlignment = TextView.TEXT_ALIGNMENT_CENTER
             setTextColor(Color.parseColor(textColor))
-            text = text
+            this.text = text
         }
         container.addView(label)
 
         container.setOnFocusChangeListener { v, hasFocus ->
-            v.setBackgroundColor(Color.parseColor(if (hasFocus) focusedBg else unfocusedBg))
+            v.setBackgroundColor(Color.parseColor(if (hasFocus) focusedBgColor else unfocusedBgColor))
         }
         container.setOnClickListener { onClick() }
         container.setOnKeyListener { _, keyCode, event ->

@@ -317,6 +317,7 @@ class HomeFragment : Fragment() {
             val card = ContinueWatchingCard(requireContext()).apply {
                 id = View.generateViewId()
                 if (topNavBarId != View.NO_ID) {
+                    // Allow DPAD_UP to travel back toward nav/hero
                     nextFocusUpId = topNavBarId
                 }
                 isFocusable = railsFocusEnabled
@@ -324,6 +325,25 @@ class HomeFragment : Fragment() {
                 descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
                 (layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
                     if (index == 0) lp.marginStart = lp.marginStart
+                }
+
+                // Fallback: if system cannot resolve nextFocusUp, explicitly route UP to hero/nav
+                setOnKeyListener { _, keyCode, event ->
+                    if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_UP && index == 0) {
+                        // Prefer hero first card; fallback to nav search
+                        val heroCard = heroCards.firstOrNull()
+                        if (heroCard != null) {
+                            heroCard.requestFocus()
+                        } else {
+                            topNavBarComposeView?.let {
+                                (it.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
+                                it.requestFocus()
+                            }
+                        }
+                        return@setOnKeyListener true
+                    }
+                    false
                 }
             }
             if (index == 0) {
@@ -336,21 +356,23 @@ class HomeFragment : Fragment() {
         continueWatchingFirstCardId = firstCardId
 
         if (firstCardId != View.NO_ID) {
+            // Establish direct focus relationship from hero to first rail card
             heroBannerView?.nextFocusDownId = firstCardId
             heroCards.forEach { it.nextFocusDownId = firstCardId }
 
-            // Provide fallback DOWN handling from hero to this rail
-            // This listener should not be overwritten. It handles key events for the hero scroll view.
-             heroScrollView?.setOnKeyListener { _, keyCode, event ->
+            // Provide explicit key handling so DPAD_DOWN from hero transfers focus to first rail item
+            heroScrollView?.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_UP -> {
+                        // DPAD_UP from hero returns focus to TopNav (search)
                         topNavBarComposeView?.let {
                             (it.getTag(R.id.tag_request_search_focus) as? Runnable)?.run()
                         }
                         true
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        // DPAD_DOWN from hero enters first rail item
                         view?.findViewById<View>(continueWatchingFirstCardId)?.requestFocus()
                         true
                     }
@@ -359,8 +381,7 @@ class HomeFragment : Fragment() {
             }
 
             heroCards.forEach { card ->
-                // This listener should not be overwritten. It handles key events for the hero cards.
-                 card.setOnKeyListener { _, keyCode, event ->
+                card.setOnKeyListener { _, keyCode, event ->
                     if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                     when (keyCode) {
                         KeyEvent.KEYCODE_DPAD_UP -> {
@@ -540,8 +561,8 @@ class HomeFragment : Fragment() {
             }
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
 
-            // This listener should not be overwritten. It handles key events for the hero scroll view.
-             setOnKeyListener { _, keyCode, event ->
+            // Intercept dpad to steer between hero and rails
+            setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_UP -> {
