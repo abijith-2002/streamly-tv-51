@@ -210,9 +210,14 @@ class ContentInfoActivity : FragmentActivity() {
         unfocusedBg: String,
         textColor: String
     ): View {
-        // Use vars for colors to avoid "val cannot be reassigned" if future changes adjust them dynamically.
-        var focusedBgColor = focusedBg
-        var unfocusedBgColor = unfocusedBg
+        /**
+         * PUBLIC_INTERFACE
+         * Builds a focusable pill-style button view.
+         * Ensures local state is handled with mutable vars to avoid reassigning vals.
+         */
+        var focusedBgColor = focusedBg // mutable to allow future dynamic adjustments
+        var unfocusedBgColor = unfocusedBg // mutable to allow future dynamic adjustments
+        val labelTextColor = textColor // remain val, not reassigned
 
         val container = LinearLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -235,13 +240,14 @@ class ContentInfoActivity : FragmentActivity() {
             gravity = android.view.Gravity.CENTER
             textSize = 16f
             textAlignment = TextView.TEXT_ALIGNMENT_CENTER
-            setTextColor(Color.parseColor(textColor))
+            setTextColor(Color.parseColor(labelTextColor))
             this.text = text
         }
         container.addView(label)
 
         container.setOnFocusChangeListener { v, hasFocus ->
-            v.setBackgroundColor(Color.parseColor(if (hasFocus) focusedBgColor else unfocusedBgColor))
+            val bgColor = if (hasFocus) focusedBgColor else unfocusedBgColor
+            v.setBackgroundColor(Color.parseColor(bgColor))
         }
         container.setOnClickListener { onClick() }
         container.setOnKeyListener { _, keyCode, event ->
