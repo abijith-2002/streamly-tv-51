@@ -1,10 +1,9 @@
 package app.claro.tv
 
 import android.os.Bundle
-import android.view.KeyEvent
 import android.util.Log
+import android.view.KeyEvent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +28,7 @@ import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +46,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.contentDescription
@@ -56,9 +59,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
-
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.collect
 
 /**
  * PUBLIC_INTERFACE
@@ -78,7 +78,6 @@ import kotlinx.coroutines.flow.collect
  * Focus behavior:
  * - Focused button background: 0xFFF4F4F4 with icon color #282828
  * - Unfocused background: 0x26F4F4F4 with icon color 0xFFF4F4F4
- * - Ensure TV DPAD focus outline behavior
  * - Initial focus on first action button
  * - DPAD_UP from actions returns to metadata section (via focus properties)
  * - DPAD_DOWN uses default focus behavior (not consumed)
@@ -163,20 +162,9 @@ private fun ContentInfoScreen(
 
     // Actions row colors
     val pillBgFocused = Color(0xFFF4F4F4)
-    val pillIconFocused = Color(0xFF282828)
+    val pillIconFocused = Color(0xFF282828) // icon/text on focused background
     val pillBgUnfocused = Color(0x26F4F4F4)
     val pillIconUnfocused = Color(0xFFF4F4F4)
-
-    // Focus event bus (failsafe): emit on focus changes to force recomposition/logging if needed
-    val focusEvents = remember { MutableSharedFlow<String>(extraBufferCapacity = 64) }
-    var focusEventTick by remember { mutableStateOf(0) }
-
-    LaunchedEffect(Unit) {
-        focusEvents.collect { ev ->
-            focusEventTick++
-            Log.d("ContentInfoFocus", "Focus bus event: $ev tick=$focusEventTick")
-        }
-    }
 
     // Focus anchors
     val metadataFocusRequester = remember { FocusRequester() }
@@ -196,9 +184,6 @@ private fun ContentInfoScreen(
             .background(screenBg)
             .padding(start = 88.dp, top = 36.dp, end = 88.dp, bottom = 48.dp)
     ) {
-        // Read tick to ensure recomposition occurs when events are emitted (no visual changes)
-        val _debugRecomposeTick = focusEventTick
-
         // "242 TNT" label - 16sp
         Text(
             text = networkLabel,
@@ -311,7 +296,7 @@ private fun ContentInfoScreen(
         // Actions row with 6 pill buttons (52dp x 40dp, radius 50dp, icons 20dp)
         Row(
             modifier = Modifier
-                .focusGroup(),
+                .focusGroup(), // Parent is a focus group only; it is not focusable and does not intercept keys
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -327,25 +312,25 @@ private fun ContentInfoScreen(
             items.forEachIndexed { index, it ->
                 val leftIndex = if (index - 1 < 0) items.lastIndex else index - 1
                 val rightIndex = if (index + 1 > items.lastIndex) 0 else index + 1
-                ActionPillButton(
-                    icon = it.icon,
-                    contentDesc = it.label,
-                    sizeW = 52.dp,
-                    sizeH = 40.dp,
-                    iconSize = 20.dp,
-                    corner = 50.dp,
-                    focusedBg = pillBgFocused,
-                    unfocusedBg = pillBgUnfocused,
-                    focusedIcon = pillIconFocused,
-                    unfocusedIcon = pillIconUnfocused,
+
+                FocusAwarePill(
+                    modifier = Modifier.semantics { contentDescription = it.label },
+                    icon = rememberVectorPainter(it.icon),
+                    text = it.label, // label included; small pill width may clip text which is acceptable per minimal design
+                    onClick = {
+                        // DPAD_CENTER behavior: action-specific handling could be added here
+                    },
+                    focusColor = pillBgFocused,
+                    unfocusColor = pillBgUnfocused,
                     focusRequester = actionRequesters[index],
                     leftRequester = actionRequesters[leftIndex],
                     rightRequester = actionRequesters[rightIndex],
                     upRequester = metadataFocusRequester,
-                    onClick = {
-                        // DPAD_CENTER behavior: action-specific handling could be added here
-                    },
-                    focusEventBus = focusEvents
+                    sizeW = 52.dp,
+                    sizeH = 40.dp,
+                    corner = 50.dp,
+                    iconSize = 20.dp,
+                    focusedIconColor = pillIconFocused
                 )
             }
         }
@@ -400,55 +385,59 @@ private fun Badge(
 }
 
 private data class ActionItem(
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val icon: ImageVector,
     val label: String
 )
 
+/**
+ * A minimal, focus-driven pill that owns focus and draws its own visuals inside a single node.
+ * - Uses a Surface that is both the focus target and the visual background.
+ * - Visual state computed only from focus state.
+ * - No interactionSource/pressed/selected logic. Only DPAD_CENTER/ENTER triggers onClick.
+ * - Directional DPAD keys return false to allow system focus navigation.
+ */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun ActionPillButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDesc: String,
-    sizeW: Dp,
-    sizeH: Dp,
-    iconSize: Dp,
-    corner: Dp,
-    focusedBg: Color,
-    unfocusedBg: Color,
-    focusedIcon: Color,
-    unfocusedIcon: Color,
+private fun FocusAwarePill(
+    modifier: Modifier = Modifier,
+    icon: Painter,
+    text: String,
+    onClick: () -> Unit,
+    focusColor: Color,
+    unfocusColor: Color,
     focusRequester: FocusRequester,
     leftRequester: FocusRequester,
     rightRequester: FocusRequester,
     upRequester: FocusRequester,
-    onClick: () -> Unit,
-    focusEventBus: MutableSharedFlow<String>? = null
+    sizeW: Dp,
+    sizeH: Dp,
+    corner: Dp,
+    iconSize: Dp,
+    focusedIconColor: Color
 ) {
-    // Visuals are driven exclusively by focus state
+    // Focus-driven state exclusively in this node
     var isFocused by remember { mutableStateOf(false) }
 
-    // Log recomposition when focus changes to validate DPAD LEFT/RIGHT triggers
-    LaunchedEffect(isFocused) {
-        Log.d("ContentInfoFocus", "Recompose: $contentDesc isFocused=$isFocused")
-    }
+    val bgColor = if (isFocused) focusColor else unfocusColor
+    // Acceptance criteria:
+    // - focused -> background = focusColor, icon = #282828
+    // - unfocused -> background = unfocusColor, icon = focusColor
+    val iconTint = if (isFocused) focusedIconColor else focusColor
+    val textTint = iconTint
 
     val shape = RoundedCornerShape(corner)
 
-    Box(
-        modifier = Modifier
+    Surface(
+        color = bgColor,
+        contentColor = iconTint,
+        shape = shape,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        modifier = modifier
             .requiredWidth(sizeW)
             .requiredHeight(sizeH)
-            .clip(shape)
-            // Background color is set directly from focus state
-            .background(if (isFocused) focusedBg else unfocusedBg, shape)
-            // Subtle outline to improve visibility on TV when focused
-            .then(
-                if (isFocused)
-                    Modifier.border(width = 1.dp, color = Color(0x33000000), shape = shape)
-                else Modifier
-            )
             .focusRequester(focusRequester)
-            // Focus target is the same node that draws the background to ensure visuals update with focus
+            // Focus target and focusable are applied to this same node that also draws the background
             .focusTarget()
             .focusProperties {
                 left = leftRequester
@@ -456,19 +445,17 @@ private fun ActionPillButton(
                 up = upRequester
                 // Do not override "down" to keep default navigation and avoid consuming DPAD_DOWN
             }
-            // Update local state when focus changes to drive visuals
             .onFocusChanged { state ->
-                val newFocus = state.hasFocus
-                if (isFocused != newFocus) {
-                    isFocused = newFocus
-                    Log.d("ContentInfoFocus", "ActionPillButton onFocusChanged: $contentDesc isFocused=$isFocused")
-                    // Emit to shared flow as a failsafe to force recomposition/logging if needed
-                    focusEventBus?.tryEmit("pill:$contentDesc focus=$isFocused")
+                val nowFocused = state.isFocused
+                if (isFocused != nowFocused) {
+                    isFocused = nowFocused
+                    Log.d(
+                        "ContentInfoFocus",
+                        "FocusAwarePill onFocusChanged: \"$text\" isFocused=$isFocused"
+                    )
                 }
             }
-            // Focusable is applied to the same node receiving focus; avoid using MutableInteractionSource for press/pressed state
             .focusable()
-            .semantics { contentDescription = contentDesc }
             // Only handle DPAD_CENTER/ENTER for click; do not consume DPAD directional keys
             .onKeyEvent { key ->
                 val code = key.nativeKeyEvent.keyCode
@@ -478,22 +465,36 @@ private fun ActionPillButton(
                         if (actionUp) onClick()
                         true
                     }
-                    // Return false for all DPAD directional keys so the system handles focus movement
                     KeyEvent.KEYCODE_DPAD_LEFT,
                     KeyEvent.KEYCODE_DPAD_RIGHT,
                     KeyEvent.KEYCODE_DPAD_UP,
                     KeyEvent.KEYCODE_DPAD_DOWN -> false
                     else -> false
                 }
-            },
-        contentAlignment = Alignment.Center
+            }
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDesc,
-            // Icon color is set directly from focus state
-            tint = if (isFocused) focusedIcon else unfocusedIcon,
-            modifier = Modifier.size(iconSize)
-        )
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                painter = icon,
+                contentDescription = text,
+                tint = iconTint,
+                modifier = Modifier.size(iconSize)
+            )
+            if (text.isNotBlank()) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = text,
+                    color = textTint,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
