@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,8 +76,8 @@ import androidx.fragment.app.FragmentActivity
  * - Unfocused background: 0x26F4F4F4 with icon color 0xFFF4F4F4
  * - Ensure TV DPAD focus outline behavior
  * - Initial focus on first action button
- * - DPAD_UP from actions returns to metadata section
- * - DPAD_DOWN stays within actions row (consumed)
+ * - DPAD_UP from actions returns to metadata section (via focus properties)
+ * - DPAD_DOWN uses default focus behavior (not consumed)
  * - DPAD_CENTER events preserved
  *
  * Intent extras:
@@ -324,15 +323,9 @@ private fun ContentInfoScreen(
                     focusRequester = actionRequesters[index],
                     leftRequester = actionRequesters[leftIndex],
                     rightRequester = actionRequesters[rightIndex],
+                    upRequester = metadataFocusRequester,
                     onClick = {
-                        // Preserve DPAD_CENTER behavior: action-specific handling could be added here
-                    },
-                    onDpadUp = {
-                        // Move back to metadata section
-                        metadataFocusRequester.requestFocus()
-                    },
-                    onDpadDown = {
-                        // Stay within actions row: consume event
+                        // DPAD_CENTER behavior: action-specific handling could be added here
                     }
                 )
             }
@@ -408,14 +401,11 @@ private fun ActionPillButton(
     focusRequester: FocusRequester,
     leftRequester: FocusRequester,
     rightRequester: FocusRequester,
-    onClick: () -> Unit,
-    onDpadUp: () -> Unit,
-    onDpadDown: () -> Unit
+    upRequester: FocusRequester,
+    onClick: () -> Unit
 ) {
-    var focused by remember { mutableStateOf(false) }
-
-    // Use an InteractionSource to drive focusable state without click ripples on TV
-    val interactionSource = remember { MutableInteractionSource() }
+    // Visuals are driven exclusively by focus state
+    var isFocused by remember { mutableStateOf(false) }
 
     val shape = RoundedCornerShape(corner)
 
@@ -424,37 +414,35 @@ private fun ActionPillButton(
             .requiredWidth(sizeW)
             .requiredHeight(sizeH)
             .clip(shape)
-            .background(if (focused) focusedBg else unfocusedBg, shape)
-            // subtle outline to ensure visible focus ring on TV
+            // Background color is set directly from focus state
+            .background(if (isFocused) focusedBg else unfocusedBg, shape)
+            // Subtle outline to improve visibility on TV when focused
             .then(
-                if (focused)
+                if (isFocused)
                     Modifier.border(width = 1.dp, color = Color(0x33000000), shape = shape)
                 else Modifier
             )
             .focusRequester(focusRequester)
+            // Focus target is the same node that draws the background to ensure visuals update with focus
             .focusTarget()
             .focusProperties {
                 left = leftRequester
                 right = rightRequester
+                up = upRequester
+                // Do not override "down" to keep default navigation and avoid consuming DPAD_DOWN
             }
-            .onFocusChanged { state -> focused = state.isFocused }
-            .focusable(interactionSource = interactionSource)
+            // Update local state when focus changes to drive visuals
+            .onFocusChanged { state -> isFocused = state.isFocused }
+            // Focusable is applied to the same node receiving focus; avoid using MutableInteractionSource for press/pressed state
+            .focusable()
             .semantics { contentDescription = contentDesc }
+            // Only handle DPAD_CENTER/ENTER for click; do not consume DPAD directional keys
             .onKeyEvent { key ->
                 val code = key.nativeKeyEvent.keyCode
-                val actionDown = key.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
                 val actionUp = key.nativeKeyEvent.action == KeyEvent.ACTION_UP
                 when (code) {
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                         if (actionUp) onClick()
-                        true
-                    }
-                    KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (actionDown) onDpadUp()
-                        true
-                    }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (actionDown) onDpadDown()
                         true
                     }
                     else -> false
@@ -465,7 +453,8 @@ private fun ActionPillButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDesc,
-            tint = if (focused) focusedIcon else unfocusedIcon,
+            // Icon color is set directly from focus state
+            tint = if (isFocused) focusedIcon else unfocusedIcon,
             modifier = Modifier.size(iconSize)
         )
     }
