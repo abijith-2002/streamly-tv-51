@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -413,6 +414,9 @@ private fun ActionPillButton(
 ) {
     var focused by remember { mutableStateOf(false) }
 
+    // Use an InteractionSource to drive focusable state without click ripples on TV
+    val interactionSource = remember { MutableInteractionSource() }
+
     val shape = RoundedCornerShape(corner)
 
     Box(
@@ -433,8 +437,8 @@ private fun ActionPillButton(
                 left = leftRequester
                 right = rightRequester
             }
-            .onFocusChanged { state -> focused = state.hasFocus }
-            .focusable()
+            .onFocusChanged { state -> focused = state.isFocused }
+            .focusable(interactionSource = interactionSource)
             .semantics { contentDescription = contentDesc }
             .onKeyEvent { key ->
                 val code = key.nativeKeyEvent.keyCode
