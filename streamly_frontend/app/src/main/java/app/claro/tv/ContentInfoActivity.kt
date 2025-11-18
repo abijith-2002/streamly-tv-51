@@ -11,17 +11,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
@@ -53,7 +49,6 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -215,6 +210,15 @@ private fun ContentInfoScreen(
                 .focusRequester(metadataFocusRequester)
                 .focusTarget()
                 .focusable()
+                // Intercept DPAD_RIGHT to move focus to the first action button without requiring CENTER
+                .onKeyEvent { key ->
+                    val isDown = key.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
+                    if (key.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && isDown) {
+                        actionRequesters.firstOrNull()?.requestFocus()
+                        return@onKeyEvent true
+                    }
+                    false
+                }
         ) {
             Column {
                 // Row: metaTitle | duration | genre | +16 anos
@@ -330,7 +334,6 @@ private fun ContentInfoScreen(
                     rightRequester = actionRequesters[rightIndex],
                     onClick = {
                         // Preserve DPAD_CENTER behavior: action-specific handling could be added here
-                        // For now: no-op to keep consistent behavior; in a real app this might start playback or set a reminder, etc.
                     },
                     onDpadUp = {
                         // Move back to metadata section
@@ -338,7 +341,11 @@ private fun ContentInfoScreen(
                     },
                     onDpadDown = {
                         // Stay within actions row: consume event
-                    }
+                    },
+                    onDpadLeft = if (index == 0) {
+                        // Special-case: DPAD_LEFT from the first action button returns to metadata
+                        { metadataFocusRequester.requestFocus() }
+                    } else null
                 )
             }
         }
@@ -415,7 +422,8 @@ private fun ActionPillButton(
     rightRequester: FocusRequester,
     onClick: () -> Unit,
     onDpadUp: () -> Unit,
-    onDpadDown: () -> Unit
+    onDpadDown: () -> Unit,
+    onDpadLeft: (() -> Unit)? = null
 ) {
     var focused by remember { mutableStateOf(false) }
 
@@ -458,6 +466,15 @@ private fun ActionPillButton(
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (actionDown) onDpadDown()
                         true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (actionDown && onDpadLeft != null) {
+                            onDpadLeft.invoke()
+                            true
+                        } else {
+                            // Let default left focus navigation occur
+                            false
+                        }
                     }
                     else -> false
                 }
