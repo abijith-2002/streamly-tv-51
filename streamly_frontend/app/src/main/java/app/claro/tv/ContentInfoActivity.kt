@@ -57,6 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collect
+
 /**
  * PUBLIC_INTERFACE
  * ContentInfoActivity
@@ -164,6 +167,17 @@ private fun ContentInfoScreen(
     val pillBgUnfocused = Color(0x26F4F4F4)
     val pillIconUnfocused = Color(0xFFF4F4F4)
 
+    // Focus event bus (failsafe): emit on focus changes to force recomposition/logging if needed
+    val focusEvents = remember { MutableSharedFlow<String>(extraBufferCapacity = 64) }
+    var focusEventTick by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        focusEvents.collect { ev ->
+            focusEventTick++
+            Log.d("ContentInfoFocus", "Focus bus event: $ev tick=$focusEventTick")
+        }
+    }
+
     // Focus anchors
     val metadataFocusRequester = remember { FocusRequester() }
     val actionRequesters = remember { List(6) { FocusRequester() } }
@@ -182,6 +196,9 @@ private fun ContentInfoScreen(
             .background(screenBg)
             .padding(start = 88.dp, top = 36.dp, end = 88.dp, bottom = 48.dp)
     ) {
+        // Read tick to ensure recomposition occurs when events are emitted (no visual changes)
+        val _debugRecomposeTick = focusEventTick
+
         // "242 TNT" label - 16sp
         Text(
             text = networkLabel,
@@ -327,7 +344,8 @@ private fun ContentInfoScreen(
                     upRequester = metadataFocusRequester,
                     onClick = {
                         // DPAD_CENTER behavior: action-specific handling could be added here
-                    }
+                    },
+                    focusEventBus = focusEvents
                 )
             }
         }
@@ -403,10 +421,16 @@ private fun ActionPillButton(
     leftRequester: FocusRequester,
     rightRequester: FocusRequester,
     upRequester: FocusRequester,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    focusEventBus: MutableSharedFlow<String>? = null
 ) {
     // Visuals are driven exclusively by focus state
     var isFocused by remember { mutableStateOf(false) }
+
+    // Log recomposition when focus changes to validate DPAD LEFT/RIGHT triggers
+    LaunchedEffect(isFocused) {
+        Log.d("ContentInfoFocus", "Recompose: $contentDesc isFocused=$isFocused")
+    }
 
     val shape = RoundedCornerShape(corner)
 
@@ -434,8 +458,13 @@ private fun ActionPillButton(
             }
             // Update local state when focus changes to drive visuals
             .onFocusChanged { state ->
-                isFocused = state.isFocused
-                Log.d("ContentInfoFocus", "ActionPillButton onFocusChanged: $contentDesc isFocused=$isFocused")
+                val newFocus = state.hasFocus
+                if (isFocused != newFocus) {
+                    isFocused = newFocus
+                    Log.d("ContentInfoFocus", "ActionPillButton onFocusChanged: $contentDesc isFocused=$isFocused")
+                    // Emit to shared flow as a failsafe to force recomposition/logging if needed
+                    focusEventBus?.tryEmit("pill:$contentDesc focus=$isFocused")
+                }
             }
             // Focusable is applied to the same node receiving focus; avoid using MutableInteractionSource for press/pressed state
             .focusable()
@@ -449,6 +478,11 @@ private fun ActionPillButton(
                         if (actionUp) onClick()
                         true
                     }
+                    // Return false for all DPAD directional keys so the system handles focus movement
+                    KeyEvent.KEYCODE_DPAD_LEFT,
+                    KeyEvent.KEYCODE_DPAD_RIGHT,
+                    KeyEvent.KEYCODE_DPAD_UP,
+                    KeyEvent.KEYCODE_DPAD_DOWN -> false
                     else -> false
                 }
             },
