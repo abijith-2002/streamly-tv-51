@@ -210,15 +210,6 @@ private fun ContentInfoScreen(
                 .focusRequester(metadataFocusRequester)
                 .focusTarget()
                 .focusable()
-                // Intercept DPAD_RIGHT to move focus to the first action button without requiring CENTER
-                .onKeyEvent { key ->
-                    val isDown = key.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
-                    if (key.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && isDown) {
-                        actionRequesters.firstOrNull()?.requestFocus()
-                        return@onKeyEvent true
-                    }
-                    false
-                }
         ) {
             Column {
                 // Row: metaTitle | duration | genre | +16 anos
@@ -341,11 +332,7 @@ private fun ContentInfoScreen(
                     },
                     onDpadDown = {
                         // Stay within actions row: consume event
-                    },
-                    onDpadLeft = if (index == 0) {
-                        // Special-case: DPAD_LEFT from the first action button returns to metadata
-                        { metadataFocusRequester.requestFocus() }
-                    } else null
+                    }
                 )
             }
         }
@@ -422,8 +409,7 @@ private fun ActionPillButton(
     rightRequester: FocusRequester,
     onClick: () -> Unit,
     onDpadUp: () -> Unit,
-    onDpadDown: () -> Unit,
-    onDpadLeft: (() -> Unit)? = null
+    onDpadDown: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
 
@@ -466,15 +452,6 @@ private fun ActionPillButton(
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (actionDown) onDpadDown()
                         true
-                    }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (actionDown && onDpadLeft != null) {
-                            onDpadLeft.invoke()
-                            true
-                        } else {
-                            // Let default left focus navigation occur
-                            false
-                        }
                     }
                     else -> false
                 }

@@ -7,10 +7,13 @@ This activity (ContentInfoActivity) implements the content details scene based o
 - Primary action pill (Reproducir) and secondary (Volver): 32dp height, rounded/focus background using #DE1717 when focused and #28292F unfocused
 
 Focus and navigation:
-- Initial focus goes to the primary action pill.
+- Initial focus goes to the first action button.
+- DPAD_LEFT and DPAD_RIGHT move focus between action buttons without requiring DPAD_CENTER, wired via FocusRequester and focusProperties.
+- DPAD_UP from the actions row returns focus to the metadata section.
+- DPAD_DOWN within the actions row is consumed (focus stays in the row).
 - DPAD_BACK finishes the activity.
-- DPAD_DOWN from top spacer moves to the action row.
-- DPAD_CENTER/ENTER on any rail item (Home) launches this activity passing metadata via Intent extras.
+- DPAD_CENTER/ENTER on a focused action triggers its handler.
+- No container (Row/LazyRow) is focusable or intercepts DPAD_LEFT/RIGHT.
 
 Intent extras:
 - EXTRA_TITLE, EXTRA_SYNOPSIS, EXTRA_ID, EXTRA_THUMBNAIL_URL
