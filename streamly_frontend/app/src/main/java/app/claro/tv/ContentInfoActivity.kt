@@ -2,6 +2,7 @@ package app.claro.tv
 
 import android.os.Bundle
 import android.view.KeyEvent
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -432,7 +433,10 @@ private fun ActionPillButton(
                 // Do not override "down" to keep default navigation and avoid consuming DPAD_DOWN
             }
             // Update local state when focus changes to drive visuals
-            .onFocusChanged { state -> isFocused = state.isFocused }
+            .onFocusChanged { state ->
+                isFocused = state.isFocused
+                Log.d("ContentInfoFocus", "ActionPillButton onFocusChanged: $contentDesc isFocused=$isFocused")
+            }
             // Focusable is applied to the same node receiving focus; avoid using MutableInteractionSource for press/pressed state
             .focusable()
             .semantics { contentDescription = contentDesc }
