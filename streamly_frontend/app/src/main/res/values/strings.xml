@@ -10,4 +10,8 @@
     <string name="rating_dislike">I don’t like it</string>
     <string name="rating_close">Close</string>
     <string name="rating_countdown">Closing in %d seconds</string>
+
+    <!-- Player/Playback strings -->
+    <string name="player_activity_label">Player</string>
+    <string name="player_view_content_description">Media Player View</string>
 </resources>

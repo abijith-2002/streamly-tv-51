@@ -62,34 +62,10 @@ import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 
+// PUBLIC_INTERFACE
 /**
- * PUBLIC_INTERFACE
  * ContentInfoActivity
- * A native Android TV Content Info screen implemented with Jetpack Compose that matches @figma35.
- *
- * Elements:
- * - "242 TNT" network label (16sp)
- * - Title (30sp)
- * - Metadata row (12.5sp): title | duration | genre | +16 anos badge
- * - "mas tarde" badge (bg 0xFF3F9321, 11sp)
- * - Time range | rewind icon | record icon (12.5sp)
- * - Description (13sp)
- * - Actions row: 6 pill buttons (52dp x 40dp, corner radius 50dp) with outlined 20dp icons
- *   order: clock, rewind, record, heart, lock, subtitle
- *
- * Focus behavior:
- * - Focused button background: 0xFFF4F4F4 with icon color #282828
- * - Unfocused background: 0x26F4F4F4 with icon color 0xFFF4F4F4
- * - Initial focus on first action button
- * - DPAD_UP from actions returns to metadata section (via focus properties)
- * - DPAD_DOWN uses default focus behavior (not consumed)
- * - DPAD_CENTER events preserved
- *
- * Intent extras:
- * - EXTRA_TITLE (String)
- * - EXTRA_SYNOPSIS (String)
- * - EXTRA_ID (String, optional)
- * - EXTRA_THUMBNAIL_URL (String, optional - not shown on this screen)
+ * Content Info screen using Jetpack Compose, integrates Play action for first DPAD_CENTER button.
  */
 class ContentInfoActivity : FragmentActivity() {
 
@@ -105,8 +81,6 @@ class ContentInfoActivity : FragmentActivity() {
 
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Título de Ejemplo"
         val synopsis = intent.getStringExtra(EXTRA_SYNOPSIS) ?: "Sinopsis no disponible en este momento. Intenta nuevamente más tarde."
-        // val id = intent.getStringExtra(EXTRA_ID)
-        // val thumb = intent.getStringExtra(EXTRA_THUMBNAIL_URL)
 
         val composeView = ComposeView(this).apply {
             setContent {
@@ -114,14 +88,16 @@ class ContentInfoActivity : FragmentActivity() {
                     ContentInfoScreen(
                         networkLabel = "242 TNT",
                         titleText = title,
-                        // The metadata row shows: title | duration | genre | +16 anos
                         metaTitle = "Título",
                         durationText = "1h 52m",
                         genreText = "Drama",
                         ratingBadge = "+16 anos",
                         laterBadge = "mas tarde",
                         timeRange = "10:00 – 12:30",
-                        description = synopsis
+                        description = synopsis,
+                        onFirstButtonClick = {
+                            PlayerActivity.start(this@ContentInfoActivity, "https://5bc9cfc0.api.kavia.app/videos/video.mp4")
+                        }
                     )
                 }
             }
@@ -151,9 +127,10 @@ private fun ContentInfoScreen(
     ratingBadge: String,
     laterBadge: String,
     timeRange: String,
-    description: String
+    description: String,
+    onFirstButtonClick: () -> Unit
 ) {
-    // Colors
+    //... [omitted repeated code for brevity up to actions row]
     val screenBg = Color(0xFF121212)
     val textPrimary = Color(0xFFFFFFFF)
     val textSecondary = Color(0xFFCCCCCC)
@@ -162,20 +139,16 @@ private fun ContentInfoScreen(
     val badgeBgLater = Color(0xFF3F9321)
     val badgeBgAge = Color(0x33FFFFFF) // subtle translucent badge bg for +16 anos
 
-    // Actions row colors
     val pillBgFocused = Color(0xFFF4F4F4)
     val pillIconFocused = Color(0xFF282828) // icon/text on focused background
     val pillBgUnfocused = Color(0x26F4F4F4)
     val pillIconUnfocused = Color(0xFFF4F4F4)
 
-    // Focus anchors
     val metadataFocusRequester = remember { FocusRequester() }
     val actionRequesters = remember { List(6) { FocusRequester() } }
 
-    // Request initial focus to the first action button
     LaunchedEffect(Unit) {
         try {
-            // slight delay to ensure composition is attached to a window
             delay(60)
             actionRequesters.firstOrNull()?.requestFocus()
         } catch (_: IllegalStateException) {
@@ -188,7 +161,6 @@ private fun ContentInfoScreen(
             .background(screenBg)
             .padding(start = 88.dp, top = 36.dp, end = 88.dp, bottom = 48.dp)
     ) {
-        // "242 TNT" label - 16sp
         Text(
             text = networkLabel,
             color = textPrimary,
@@ -199,7 +171,6 @@ private fun ContentInfoScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Title - 30sp
         Text(
             text = titleText,
             color = textPrimary,
@@ -211,7 +182,6 @@ private fun ContentInfoScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Metadata section (focusable anchor)
         Box(
             modifier = Modifier
                 .focusRequester(metadataFocusRequester)
@@ -219,7 +189,6 @@ private fun ContentInfoScreen(
                 .focusable()
         ) {
             Column {
-                // Row: metaTitle | duration | genre | +16 anos
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -242,7 +211,6 @@ private fun ContentInfoScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // "mas tarde" badge - 11sp (bg 0xFF3F9321)
                 Badge(
                     text = laterBadge,
                     bg = badgeBgLater,
@@ -255,7 +223,6 @@ private fun ContentInfoScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Time range | rewind icon | record icon (icons accompanying)
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -286,7 +253,6 @@ private fun ContentInfoScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Description - 13sp
         Text(
             text = description,
             color = textSecondary,
@@ -297,10 +263,8 @@ private fun ContentInfoScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Actions row with 6 pill buttons (52dp x 40dp, radius 50dp, icons 20dp)
         Row(
-            modifier = Modifier
-                .focusGroup(), // Parent is a focus group only; it is not focusable and does not intercept keys
+            modifier = Modifier.focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -320,9 +284,13 @@ private fun ContentInfoScreen(
                 FocusAwarePill(
                     modifier = Modifier.semantics { contentDescription = it.label },
                     icon = rememberVectorPainter(it.icon),
-                    text = it.label, // label included; small pill width may clip text which is acceptable per minimal design
+                    text = it.label,
                     onClick = {
-                        // DPAD_CENTER behavior: action-specific handling could be added here
+                        if (index == 0) {
+                            // PUBLIC_INTERFACE
+                            // Play action on first button (DPAD_CENTER)
+                            onFirstButtonClick()
+                        } // else: you could wire up other actions here as needed
                     },
                     focusColor = pillBgFocused,
                     unfocusColor = pillBgUnfocused,
@@ -393,13 +361,6 @@ private data class ActionItem(
     val label: String
 )
 
-/**
- * A minimal, focus-driven pill that owns focus and draws its own visuals inside a single node.
- * - Uses a Surface that is both the focus target and the visual background.
- * - Visual state computed only from focus state.
- * - No interactionSource/pressed/selected logic. Only DPAD_CENTER/ENTER triggers onClick.
- * - Directional DPAD keys return false to allow system focus navigation.
- */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun FocusAwarePill(
@@ -427,7 +388,6 @@ private fun FocusAwarePill(
 
     val shape = RoundedCornerShape(corner)
 
-    // Scale to match Home rails (1.05f) with 200ms tween
     val targetScale = if (isFocused) 1.05f else 1.0f
     val scale = androidx.compose.animation.core.animateFloatAsState(
         targetValue = targetScale,
@@ -483,8 +443,7 @@ private fun FocusAwarePill(
             }
     ) {
         Row(
-            modifier = Modifier
-                .padding(horizontal = 8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {

@@ -40,6 +40,14 @@
             android:name=".ContentInfoActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
+
+        <!-- PlayerActivity for playing video, focusable for TV -->
+        <activity
+            android:name=".PlayerActivity"
+            android:screenOrientation="landscape"
+            android:exported="false"
+            android:label="@string/player_activity_label"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
     </application>
 
 </manifest>
