@@ -80,7 +80,8 @@ class ContentInfoActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Título de Ejemplo"
-        val synopsis = intent.getStringExtra(EXTRA_SYNOPSIS) ?: "Sinopsis no disponible en este momento. Intenta nuevamente más tarde."
+        val synopsis = intent.getStringExtra(EXTRA_SYNOPSIS)
+            ?: "Sinopsis no disponible en este momento. Intenta nuevamente más tarde."
 
         val composeView = ComposeView(this).apply {
             setContent {
@@ -96,7 +97,10 @@ class ContentInfoActivity : FragmentActivity() {
                         timeRange = "10:00 – 12:30",
                         description = synopsis,
                         onFirstButtonClick = {
-                            PlayerActivity.start(this@ContentInfoActivity, "https://5bc9cfc0.api.kavia.app/videos/video.mp4")
+                            PlayerActivity.start(
+                                this@ContentInfoActivity,
+                                "https://5bc9cfc0.api.kavia.app/videos/video.mp4"
+                            )
                         }
                     )
                 }
@@ -111,6 +115,7 @@ class ContentInfoActivity : FragmentActivity() {
                 finish()
                 true
             }
+
             else -> super.onKeyDown(keyCode, event)
         }
     }
@@ -130,14 +135,14 @@ private fun ContentInfoScreen(
     description: String,
     onFirstButtonClick: () -> Unit
 ) {
-    //... [omitted repeated code for brevity up to actions row]
+    // TV theme colors
     val screenBg = Color(0xFF121212)
     val textPrimary = Color(0xFFFFFFFF)
     val textSecondary = Color(0xFFCCCCCC)
     val metaTextColor = Color(0xFFEEEEEE)
     val badgeTextColor = Color(0xFFFFFFFF)
     val badgeBgLater = Color(0xFF3F9321)
-    val badgeBgAge = Color(0x33FFFFFF) // subtle translucent badge bg for +16 anos
+    val badgeBgAge = Color(0x33FFFFFF)
 
     val pillBgFocused = Color(0xFFF4F4F4)
     val pillIconFocused = Color(0xFF282828) // icon/text on focused background
@@ -268,6 +273,7 @@ private fun ContentInfoScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Button/action items for this screen; none with ellipsis
             val items = listOf(
                 ActionItem(Icons.Outlined.AccessTime, "Recordatorio"),
                 ActionItem(Icons.Outlined.Replay, "Rebobinar"),
@@ -284,7 +290,7 @@ private fun ContentInfoScreen(
                 FocusAwarePill(
                     modifier = Modifier.semantics { contentDescription = it.label },
                     icon = rememberVectorPainter(it.icon),
-                    text = it.label,
+                    text = it.label, // never add "..." here
                     onClick = {
                         if (index == 0) {
                             // PUBLIC_INTERFACE
@@ -358,7 +364,7 @@ private fun Badge(
 
 private data class ActionItem(
     val icon: ImageVector,
-    val label: String
+    val label: String // Button text never includes ellipsis ("...")
 )
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -434,6 +440,7 @@ private fun FocusAwarePill(
                         if (actionUp) onClick()
                         true
                     }
+
                     KeyEvent.KEYCODE_DPAD_LEFT,
                     KeyEvent.KEYCODE_DPAD_RIGHT,
                     KeyEvent.KEYCODE_DPAD_UP,
@@ -456,10 +463,11 @@ private fun FocusAwarePill(
             if (text.isNotBlank()) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = text,
+                    text = text, // no trailing "..."
                     color = textTint,
                     fontSize = 12.sp,
                     maxLines = 1,
+                    // Ensure TV-friendly clarity, but don't ever show "..." on the button
                     overflow = TextOverflow.Ellipsis
                 )
             }
